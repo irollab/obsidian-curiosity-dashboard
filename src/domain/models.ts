@@ -35,8 +35,8 @@ export interface MetricRow {
 export type FocusState =
   | { kind: 'none' }
   | { kind: 'multiple'; topics: TopicRecord[] }
-  | { kind: 'invalid-stage'; topic: TopicRecord }
-  | { kind: 'ready'; topic: TopicRecord };
+  | { kind: 'invalid-stage'; topic: TopicRecord & { stage: null } }
+  | { kind: 'ready'; topic: TopicRecord & { stage: Stage } };
 
 export interface DashboardModel {
   focus: FocusState;

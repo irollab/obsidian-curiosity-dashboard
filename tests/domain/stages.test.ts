@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextStage, normalizeStage, stageIndex } from '../../src/domain/stages';
+import { STAGES, nextStage, normalizeStage, stageIndex } from '../../src/domain/stages';
+
+const stageTransitions = [
+  ['选题', '策划'],
+  ['策划', '制作'],
+  ['制作', '发布'],
+  ['发布', '复盘'],
+  ['复盘', null],
+] as const;
+
+const stageIndexes = [
+  ['选题', 0],
+  ['策划', 1],
+  ['制作', 2],
+  ['发布', 3],
+  ['复盘', 4],
+] as const;
 
 describe('stage model', () => {
+  it('keeps stages in workflow order', () => {
+    expect(STAGES).toEqual(['选题', '策划', '制作', '发布', '复盘']);
+  });
+
   it('normalizes supported stages', () => {
     expect(normalizeStage('制作')).toBe('制作');
   });
@@ -12,12 +32,11 @@ describe('stage model', () => {
     expect(normalizeStage(undefined)).toBeNull();
   });
 
-  it('returns the next stage', () => {
-    expect(nextStage('策划')).toBe('制作');
-    expect(nextStage('复盘')).toBeNull();
+  it.each(stageTransitions)('moves from %s to %s', (stage, expected) => {
+    expect(nextStage(stage)).toBe(expected);
   });
 
-  it('returns a stage index', () => {
-    expect(stageIndex('发布')).toBe(3);
+  it.each(stageIndexes)('returns the index of %s', (stage, expected) => {
+    expect(stageIndex(stage)).toBe(expected);
   });
 });
