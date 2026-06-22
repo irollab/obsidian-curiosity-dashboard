@@ -1,0 +1,56 @@
+import type { Stage } from './stages';
+
+export interface TopicRecord {
+  path: string;
+  basename: string;
+  title: string;
+  issue: number;
+  status: string;
+  stage: Stage | null;
+  priority: string | null;
+  dueDate: string | null;
+  nextAction: string | null;
+  homepageFocus: boolean;
+  scriptPath: string | null;
+  assetPath: string | null;
+  reviewPath: string | null;
+}
+
+export interface ChecklistTask {
+  line: number;
+  text: string;
+  checked: boolean;
+}
+
+export interface MetricRow {
+  platform: string;
+  collectedAt: string | null;
+  views: string | null;
+  likes: string | null;
+  favorites: string | null;
+  comments: string | null;
+  shares: string | null;
+}
+
+export type FocusState =
+  | { kind: 'none' }
+  | { kind: 'multiple'; topics: TopicRecord[] }
+  | { kind: 'invalid-stage'; topic: TopicRecord }
+  | { kind: 'ready'; topic: TopicRecord };
+
+export interface DashboardModel {
+  focus: FocusState;
+  tasks: ChecklistTask[];
+  thisWeek: TopicRecord[];
+  queue: TopicRecord[];
+  metrics: MetricRow[];
+  reviewPath: string | null;
+  commentEvidence: string[];
+  backgroundUrl: string | null;
+  mobileReadOnly: boolean;
+  associationCandidates: {
+    scriptPath: string[];
+    assetPath: string[];
+    reviewPath: string[];
+  };
+}
