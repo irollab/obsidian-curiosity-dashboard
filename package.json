@@ -1,0 +1,21 @@
+{
+  "name": "obsidian-curiosity-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "npm run typecheck && node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "esbuild": "0.28.1",
+    "obsidian": "1.13.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.9"
+  }
+}

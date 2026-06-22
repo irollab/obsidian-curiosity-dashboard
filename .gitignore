@@ -1,1 +1,7 @@
 .worktrees/
+node_modules/
+dist/
+main.js
+*.zip
+coverage/
+.DS_Store
