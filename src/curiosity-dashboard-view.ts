@@ -16,6 +16,8 @@ import type CuriosityDashboardPlugin from './main';
 import { DASHBOARD_VIEW_TYPE } from './constants';
 
 type DashboardTab = DashboardSettings['defaultTab'];
+const POST_CREATE_REFRESH_ATTEMPTS = 20;
+const POST_CREATE_REFRESH_DELAY_MS = 25;
 
 export class CuriosityDashboardView extends ItemView {
   private activeTab: DashboardTab;
@@ -241,7 +243,22 @@ export class CuriosityDashboardView extends ItemView {
       openError = error;
     }
 
-    const refreshOutcome = await this.refresh();
+    let refreshOutcome = await this.refresh();
+    if (
+      kind !== 'topic'
+      && topic !== null
+      && associationError === null
+      && refreshOutcome.status !== 'error'
+    ) {
+      for (let attempt = 1;
+        attempt < POST_CREATE_REFRESH_ATTEMPTS
+        && !createdFocusVisible(this.lastModel, topic.path);
+        attempt += 1) {
+        await delay(POST_CREATE_REFRESH_DELAY_MS);
+        refreshOutcome = await this.refresh();
+        if (refreshOutcome.status === 'error') break;
+      }
+    }
     const refreshError = refreshOutcome.status === 'error' ? refreshOutcome.error : null;
 
     if (associationError !== null || openError !== null || refreshError !== null) {
@@ -426,6 +443,18 @@ function currentFocusTopic(model: DashboardModel): TopicRecord | null {
   return model.focus.kind === 'ready' || model.focus.kind === 'invalid-stage'
     ? model.focus.topic
     : null;
+}
+
+function createdFocusVisible(
+  model: DashboardModel | null,
+  topicPath: string,
+): boolean {
+  if (model === null) return false;
+  return currentFocusTopic(model)?.path === topicPath;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function observedReviewPaths(model: DashboardModel): string[] {

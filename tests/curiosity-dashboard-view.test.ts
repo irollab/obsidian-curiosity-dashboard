@@ -887,7 +887,7 @@ describe('CuriosityDashboardView', () => {
     ));
   });
 
-  it('does not report a stale post-create refresh as a failure', async () => {
+  it('retries a successful post-create refresh until the current focus is visible', async () => {
     const topic = {
       path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
       status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
@@ -895,11 +895,11 @@ describe('CuriosityDashboardView', () => {
       reviewPath: null,
     };
     const value: DashboardModel = { ...model, focus: { kind: 'ready', topic } };
-    const pendingRefresh = deferred<DashboardModel>();
+    const transientEmpty: DashboardModel = { ...model, focus: { kind: 'none' } };
     const load = vi.fn<() => Promise<DashboardModel>>()
       .mockResolvedValueOnce(value)
       .mockResolvedValueOnce(value)
-      .mockImplementationOnce(() => pendingRefresh.promise)
+      .mockResolvedValueOnce(transientEmpty)
       .mockResolvedValueOnce(value);
     const harness = makeHarness(load);
     modalMock.createAsk.mockResolvedValueOnce({
@@ -911,15 +911,11 @@ describe('CuriosityDashboardView', () => {
     await harness.view.refresh();
 
     findByText(harness.view.contentEl, 'Script')?.parent?.click();
-    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(3));
-    await expect(harness.view.refresh()).resolves.toEqual({ status: 'success' });
-    pendingRefresh.resolve(value);
-    await pendingRefresh.promise;
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(4));
 
     expect(obsidianMock.notices).toEqual([]);
     expect(findByText(harness.view.contentEl, 'Chase your curiosity')).toBeDefined();
+    expect(findByText(harness.view.contentEl, '尚未设置当前作品。')).toBeUndefined();
   });
 
   it('coalesces Quick Actions and Dock creation into one modal and allows retry after settlement', async () => {
