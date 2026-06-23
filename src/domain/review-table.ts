@@ -18,6 +18,12 @@ interface MarkdownTable {
   endLine: number;
 }
 
+interface MarkdownHeading {
+  index: number;
+  level: number;
+  title: string;
+}
+
 export function parseReviewMetrics(markdown: string): MetricRow[] {
   const lines = visibleMarkdownLines(markdown);
   const tables = extractTables(lines);
@@ -55,6 +61,7 @@ export function visibleMarkdownLines(markdown: string): string[] {
   const lines = markdown.split(/\r?\n/);
   let fence: { marker: '`' | '~'; length: number } | null = null;
   const commentState = { active: false };
+  const listLevels: number[] = [];
 
   return lines.map((line) => {
     if (fence !== null) {
@@ -63,18 +70,22 @@ export function visibleMarkdownLines(markdown: string): string[] {
     }
 
     const withoutComments = stripHtmlComments(line, commentState);
-    if (/^(?: {4}|\t)/.test(withoutComments)) return '';
+    const listItem = parseListItem(withoutComments);
+    const indentation = indentationWidth(/^([ \t]*)/.exec(withoutComments)?.[1] ?? '');
+    if (indentation >= 4 && !isNestedListItem(listItem, listLevels)) return '';
 
     const opening = /^(?: {0,3})(`{3,}|~{3,})(.*)$/.exec(withoutComments);
     const sequence = opening?.[1];
     const suffix = opening?.[2] ?? '';
     if (sequence !== undefined && !(sequence.startsWith('`') && suffix.includes('`'))) {
+      listLevels.length = 0;
       fence = {
         marker: sequence[0] as '`' | '~',
         length: sequence.length,
       };
       return '';
     }
+    updateListLevels(withoutComments, listItem, listLevels);
     return withoutComments;
   });
 }
@@ -123,14 +134,68 @@ function nearestPlatform(
   const previousTableEnd = tables
     .filter((candidate) => candidate.endLine < table.startLine)
     .at(-1)?.endLine ?? -1;
+  const currentHeading = nearestHeadingBefore(lines, table.startLine);
+  const localBoundary = Math.max(previousTableEnd, currentHeading?.index ?? -1);
 
-  for (let index = table.startLine - 1; index > previousTableEnd; index -= 1) {
-    if (/^ {0,3}#{1,6}(?:\s|$)/.test(lines[index] ?? '')) return null;
-    const match = /^\s*(?:[-+*]\s+)?平台\s*[：:]\s*(\S.*?)\s*$/.exec(lines[index] ?? '');
-    const platform = match?.[1]?.trim();
-    if (platform !== undefined && platform.length > 0) return platform;
+  for (let index = table.startLine - 1; index > localBoundary; index -= 1) {
+    const platform = platformDeclaration(lines[index] ?? '');
+    if (platform !== null) return platform;
+  }
+
+  return currentHeading === null
+    ? null
+    : platformFromPrecedingMetadataSection(lines, currentHeading);
+}
+
+function platformFromPrecedingMetadataSection(
+  lines: string[],
+  currentHeading: MarkdownHeading,
+): string | null {
+  if (!['数据快照', '数据记录'].includes(currentHeading.title)) return null;
+
+  let previousHeading: MarkdownHeading | null = null;
+  for (let index = currentHeading.index - 1; index >= 0; index -= 1) {
+    const heading = parseHeading(lines[index] ?? '', index);
+    if (heading === null) continue;
+    if (heading.level < currentHeading.level) return null;
+    if (heading.level === currentHeading.level) {
+      previousHeading = heading;
+      break;
+    }
+  }
+  if (
+    previousHeading === null ||
+    !['作品信息', '发布信息'].includes(previousHeading.title)
+  ) {
+    return null;
+  }
+
+  const platforms = new Set<string>();
+  for (let index = previousHeading.index + 1; index < currentHeading.index; index += 1) {
+    const platform = platformDeclaration(lines[index] ?? '');
+    if (platform !== null) platforms.add(platform);
+  }
+  return platforms.size === 1 ? ([...platforms][0] ?? null) : null;
+}
+
+function nearestHeadingBefore(lines: string[], lineNumber: number): MarkdownHeading | null {
+  for (let index = lineNumber - 1; index >= 0; index -= 1) {
+    const heading = parseHeading(lines[index] ?? '', index);
+    if (heading !== null) return heading;
   }
   return null;
+}
+
+function parseHeading(line: string, index: number): MarkdownHeading | null {
+  const match = /^ {0,3}(#{1,6})(?:\s+(.+?)\s*#*\s*|\s*)$/.exec(line);
+  const marker = match?.[1];
+  if (marker === undefined) return null;
+  return { index, level: marker.length, title: match?.[2]?.trim() ?? '' };
+}
+
+function platformDeclaration(line: string): string | null {
+  const platform = /^\s*(?:[-+*]\s+)?平台\s*[：:]\s*(\S.*?)\s*$/.exec(line)?.[1]?.trim();
+  return platform === undefined || platform.length === 0 ? null : platform;
 }
 
 function extractTables(lines: string[]): MarkdownTable[] {
@@ -202,6 +267,41 @@ function stripHtmlComments(
   }
 
   return result;
+}
+
+function parseListItem(line: string): { indentation: number } | null {
+  const match = /^([ \t]*)(?:[-+*]|\d+[.)])\s+/.exec(line);
+  return match === null ? null : { indentation: indentationWidth(match[1] ?? '') };
+}
+
+function indentationWidth(whitespace: string): number {
+  let width = 0;
+  for (const character of whitespace) {
+    width = character === '\t' ? width + (4 - (width % 4)) : width + 1;
+  }
+  return width;
+}
+
+function isNestedListItem(
+  item: { indentation: number } | null,
+  listLevels: number[],
+): boolean {
+  return item !== null && listLevels.some((level) => level < item.indentation);
+}
+
+function updateListLevels(
+  line: string,
+  item: { indentation: number } | null,
+  listLevels: number[],
+): void {
+  if (item !== null) {
+    const ancestors = listLevels.filter((level) => level < item.indentation);
+    listLevels.splice(0, listLevels.length, ...ancestors, item.indentation);
+    return;
+  }
+  if (line.trim().length > 0 && indentationWidth(/^([ \t]*)/.exec(line)?.[1] ?? '') === 0) {
+    listLevels.length = 0;
+  }
 }
 
 function splitRow(line: string): string[] {

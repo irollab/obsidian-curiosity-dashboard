@@ -195,19 +195,29 @@ describe('ReviewMetricsService', () => {
         '~~~markdown',
         '- 围栏伪证据',
         '~~~',
+        '普通段落会结束列表上下文',
         '    - 缩进伪证据',
         '<!--',
         '- 注释伪证据',
         '-->',
         '### 分类',
         '- 子标题可见证据',
+        '- 父级需求',
+        '    - 四空格子需求',
+        '\t- Tab 子需求',
       ].join('\n'),
     );
     vault.metadata.set('60-发布复盘/visible-comments.md', { created: '2026-06-23' });
 
     const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
 
-    expect(result.commentEvidence).toEqual(['可见证据', '子标题可见证据']);
+    expect(result.commentEvidence).toEqual([
+      '可见证据',
+      '子标题可见证据',
+      '父级需求',
+      '四空格子需求',
+      'Tab 子需求',
+    ]);
   });
 
   it('returns an empty result when no eligible review exists', async () => {

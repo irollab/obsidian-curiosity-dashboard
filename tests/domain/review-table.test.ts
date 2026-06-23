@@ -250,4 +250,82 @@ describe('parseReviewMetrics', () => {
 
     expect(parseReviewMetrics(markdown)).toEqual([]);
   });
+
+  it('binds a 数据快照 table to the preceding 作品信息 section', () => {
+    const markdown = [
+      '## 作品信息',
+      '- 标题：示例作品',
+      '- 平台：抖音',
+      '## 数据快照',
+      '| 时间点 | 播放 | 点赞 |',
+      '| --- | ---: | ---: |',
+      '| 24小时 | 500 | 20 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)[0]).toMatchObject({
+      platform: '抖音',
+      views: '500',
+      likes: '20',
+    });
+  });
+
+  it('binds a 数据记录 table to the preceding 发布信息 section', () => {
+    const markdown = [
+      '### 发布信息',
+      '- 平台：小红书',
+      '### 数据记录',
+      '| 采集时间 | 播放/阅读 | 收藏 |',
+      '| --- | ---: | ---: |',
+      '| 2026-06-23 10:00 | 300 | 12 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)[0]).toMatchObject({
+      platform: '小红书',
+      collectedAt: '2026-06-23 10:00',
+      views: '300',
+      favorites: '12',
+    });
+  });
+
+  it('does not bind a data table to an ordinary preceding section', () => {
+    const markdown = [
+      '## 普通章节',
+      '- 平台：抖音',
+      '## 数据快照',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
+
+  it('does not jump over an intervening same-level section', () => {
+    const markdown = [
+      '## 作品信息',
+      '- 平台：抖音',
+      '## 其他信息',
+      '- 说明：中间章节',
+      '## 数据快照',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
+
+  it('rejects conflicting platform declarations in the metadata section', () => {
+    const markdown = [
+      '## 发布信息',
+      '- 平台：抖音',
+      '- 平台：B站',
+      '## 数据记录',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
 });
