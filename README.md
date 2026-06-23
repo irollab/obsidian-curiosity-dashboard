@@ -47,7 +47,7 @@
 - 运行时零网络：不依赖外部 API、CDN、远程字体或图标。
 - 运行时不依赖 Bases、Dataview、React、Tailwind 或 Framer Motion。
 - 不上传 Vault 内容，不执行 Shell、Codex 或外部程序，不删除、移动或重命名 Vault 文件。
-- 写入仅限当前 Checklist 标记、经确认的单步阶段推进，以及经预览的模板创建。
+- 写入仅限当前 Checklist 标记、经确认的单步阶段推进、经预览的模板创建，以及受控写入 `script_path`、`asset_path` 和 `review_path` 关联字段。
 - 移动端始终只读。
 
 # Development
@@ -62,7 +62,7 @@ npm run build
 npm run package
 ```
 
-CI 在 Windows 和 macOS 上执行安装、测试和生产构建。真实 Obsidian 视觉、交互和 Network 检查仍必须按 [独立 Vault 验证清单](docs/installation.md#独立-vault-验证) 手动完成；自动测试不代表实机 smoke test 已执行。
+CI 在 Windows 和 macOS 上执行安装、测试、生产构建、打包和 ZIP 内容验证。真实 Obsidian 视觉、交互和 Network 检查仍必须按 [独立 Vault 验证清单](docs/installation.md#独立-vault-验证) 手动完成；自动测试不代表实机 smoke test 已执行。
 
 # Release files
 
@@ -75,7 +75,7 @@ dist/curiosity-dashboard/styles.css
 dist/curiosity-dashboard-<version>.zip
 ```
 
-ZIP 中只有 `curiosity-dashboard/` 下述三个插件文件，不包含源码、示例、用户数据或背景图。版本号来自 `package.json` 并必须与 `manifest.json` 一致，目录 ID 来自 `manifest.json`。
+ZIP 中只有 `curiosity-dashboard/` 下述三个插件文件，不包含源码、示例、用户数据或背景图。版本号来自 `package.json` 并必须与 `manifest.json` 一致，目录 ID 来自 `manifest.json`。打包命令会立即解析 ZIP 的 central/local headers，验证条目集合、UTF-8 标志、CRC、解压长度与源文件内容；任一检查失败则命令失败。
 
 # License
 

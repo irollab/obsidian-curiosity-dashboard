@@ -32,6 +32,14 @@ describe('release documentation contract', () => {
     expect(fields).toContain('移动端始终只读');
   });
 
+  it('documents every controlled write including association frontmatter', async () => {
+    const readme = await text('README.md');
+
+    expect(readme).toContain(
+      '受控写入 `script_path`、`asset_path` 和 `review_path` 关联字段',
+    );
+  });
+
   it('targets Node 24 CI on Windows and macOS with read-only permissions', async () => {
     const workflow = await text('.github/workflows/ci.yml');
 
@@ -42,14 +50,27 @@ describe('release documentation contract', () => {
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npm test');
     expect(workflow).toContain('npm run build');
+    expect(workflow).toContain('npm run package');
+    expect(workflow.indexOf('npm run package')).toBeGreaterThan(
+      workflow.indexOf('npm run build'),
+    );
   });
 
   it('derives release identity from manifest and package metadata', async () => {
     const script = await text('scripts/package.mjs');
+    const packageJson = JSON.parse(await text('package.json')) as {
+      scripts: Record<string, string>;
+    };
+    const verifier = await text('scripts/verify-package.mjs');
 
     expect(script).toContain("readFile('package.json'");
     expect(script).toContain("readFile('manifest.json'");
     expect(script).not.toContain('curiosity-dashboard-0.1.0.zip');
+    expect(packageJson.scripts.package).toContain('node scripts/verify-package.mjs');
+    expect(verifier).toContain('inflateRawSync');
+    expect(verifier).toContain('0x02014b50');
+    expect(verifier).toContain('0x04034b50');
+    expect(verifier).toContain('crc32');
   });
 });
 
