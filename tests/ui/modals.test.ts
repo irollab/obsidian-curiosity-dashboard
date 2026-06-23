@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const obsidianMock = vi.hoisted(() => {
   class Element {
     readonly children: Element[] = [];
+    readonly attributes = new Map<string, string>();
     text = '';
 
     createEl(_tag: string, options: { attr?: Record<string, string>; cls?: string; text?: string } = {}) {
       const child = new Element();
       child.text = options.text ?? '';
+      for (const [name, value] of Object.entries(options.attr ?? {})) {
+        child.setAttribute(name, value);
+      }
       this.children.push(child);
       return child;
     }
@@ -19,9 +23,18 @@ const obsidianMock = vi.hoisted(() => {
     setText(value: string): void {
       this.text = value;
     }
+
+    setAttribute(name: string, value: string): void {
+      this.attributes.set(name, value);
+    }
+
+    getAttribute(name: string): string | null {
+      return this.attributes.get(name) ?? null;
+    }
   }
 
   class TextComponent {
+    readonly inputEl = new Element();
     value = '';
     private change: (value: string) => void = () => undefined;
 
@@ -101,6 +114,7 @@ const obsidianMock = vi.hoisted(() => {
 
   class Modal {
     readonly contentEl = new Element();
+    readonly modalEl = new Element();
 
     constructor(readonly app: unknown) {}
 
@@ -167,6 +181,9 @@ describe('ConfirmStageModal', () => {
     expect(obsidianMock.state.lastModal?.contentEl.children.map((child) => child.text)).toContain(
       '从「制作」推进到「发布」？',
     );
+    expect(obsidianMock.state.lastModal?.modalEl.getAttribute('aria-labelledby')).toBe(
+      'curiosity-confirm-stage-title',
+    );
     button('推进').trigger();
     button('推进').trigger();
 
@@ -210,6 +227,19 @@ describe('CreateFileModal', () => {
     expect(setting('期数').texts[0]?.value).toBe('39');
     expect(setting('标题').texts[0]?.value).toBe('首页');
     expect(setting('目标路径').texts[0]?.value).toBe('40-脚本大纲/39-首页成稿.md');
+    expect(setting('期数').texts[0]?.inputEl.getAttribute('aria-label')).toBe('期数');
+    expect(setting('标题').texts[0]?.inputEl.getAttribute('aria-label')).toBe('标题');
+    expect(setting('目标路径').texts[0]?.inputEl.getAttribute('aria-label')).toBe('目标路径');
+    expect(setting('期数').texts[0]?.inputEl.getAttribute('aria-describedby')).toBe(
+      'curiosity-create-file-error',
+    );
+    expect(obsidianMock.state.lastModal?.modalEl.getAttribute('aria-labelledby')).toBe(
+      'curiosity-create-file-title',
+    );
+    const error = obsidianMock.state.lastModal?.contentEl.children.find((child) =>
+      child.getAttribute('role') === 'alert');
+    expect(error?.getAttribute('id')).toBe('curiosity-create-file-error');
+    expect(error?.getAttribute('aria-live')).toBe('polite');
     button('创建').trigger();
     button('创建').trigger();
 

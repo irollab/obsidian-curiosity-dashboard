@@ -32,21 +32,30 @@ interface LatestRefreshCallbacks<T> {
   error: (error: unknown) => void;
 }
 
+export type RefreshOutcome =
+  | { status: 'success' }
+  | { status: 'error'; error: unknown }
+  | { status: 'stale' };
+
 export class LatestRefresh<T> {
   private revision = 0;
   private disposed = false;
 
   constructor(private readonly callbacks: LatestRefreshCallbacks<T>) {}
 
-  async run(load: () => Promise<T>): Promise<void> {
-    if (this.disposed) return;
+  async run(load: () => Promise<T>): Promise<RefreshOutcome> {
+    if (this.disposed) return { status: 'stale' };
     const revision = ++this.revision;
     this.callbacks.loading();
     try {
       const value = await load();
-      if (this.isCurrent(revision)) this.callbacks.success(value);
+      if (!this.isCurrent(revision)) return { status: 'stale' };
+      this.callbacks.success(value);
+      return { status: 'success' };
     } catch (error) {
-      if (this.isCurrent(revision)) this.callbacks.error(error);
+      if (!this.isCurrent(revision)) return { status: 'stale' };
+      this.callbacks.error(error);
+      return { status: 'error', error };
     }
   }
 

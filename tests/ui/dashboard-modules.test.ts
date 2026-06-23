@@ -176,6 +176,31 @@ describe('dashboard secondary modules', () => {
     expect(actions.openPath).toHaveBeenCalledWith('60-发布复盘/39-review.md');
   });
 
+  it('limits Channel Pulse rows and comments while deriving columns from every source row', () => {
+    const metrics = Array.from({ length: 14 }, (_, index) => ({
+      collectedAt: null,
+      comments: null,
+      favorites: index === 13 ? '99' : null,
+      likes: null,
+      platform: `平台 ${index + 1}`,
+      shares: null,
+      views: String(100 + index),
+    }));
+    const commentEvidence = Array.from({ length: 10 }, (_, index) => `评论 ${index + 1}`);
+    const { root } = render(model({ commentEvidence, metrics }), 'data');
+    const pulse = section(root, 'Channel Pulse');
+
+    expect(findAll(pulse, (element) => element.tag === 'tbody')[0]?.children).toHaveLength(12);
+    expect(findByText(pulse, '平台 12')).toBeDefined();
+    expect(findByText(pulse, '平台 13')).toBeUndefined();
+    expect(findByText(pulse, '收藏')).toBeDefined();
+    expect(findByText(pulse, '另有 2 条平台数据')).toBeDefined();
+    expect(findAll(pulse, (element) => element.tag === 'blockquote')).toHaveLength(8);
+    expect(findByText(pulse, '评论 8')).toBeDefined();
+    expect(findByText(pulse, '评论 9')).toBeUndefined();
+    expect(findByText(pulse, '另有 2 条评论')).toBeDefined();
+  });
+
   it('keeps the local review entry and explicit comment state when metrics are absent', () => {
     const { root } = render(model({ reviewPath: '60-发布复盘/39-review.md' }), 'data');
 
@@ -251,6 +276,34 @@ describe('dashboard secondary modules', () => {
     await pendingScript;
     await Promise.resolve();
     expect(dockButton?.disabled).toBe(false);
+  });
+
+  it.each([
+    ['Mission', 'openPath'],
+    ['Tasks', 'selectTab'],
+    ['Data', 'selectTab'],
+  ] as const)('keeps the Dock %s action guarded until its handler promise settles', async (label, handler) => {
+    let resolveAction!: () => void;
+    const pendingAction = new Promise<void>((resolve) => { resolveAction = resolve; });
+    const current = { ...topic, reviewPath: '60-发布复盘/39.md', scriptPath: '40-脚本大纲/39.md' };
+    const result = render(model({ focus: { kind: 'ready', topic: { ...current, stage: '制作' } } }));
+    vi.mocked(result.actions[handler]).mockReturnValueOnce(pendingAction);
+    const dock = findAll(result.root, (element) => element.classList.has('curiosity-dock'))[0]!;
+    const button = findByText(dock, label)?.parent;
+
+    button?.click();
+    await Promise.resolve();
+    button?.click();
+
+    expect(result.actions[handler]).toHaveBeenCalledOnce();
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttr('aria-busy')).toBe('true');
+
+    resolveAction();
+    await pendingAction;
+    await Promise.resolve();
+    expect(button?.disabled).toBe(false);
+    expect(button?.getAttr('aria-busy')).toBeNull();
   });
 
   it('builds an icon-backed Dock whose enabled items invoke real destinations', () => {

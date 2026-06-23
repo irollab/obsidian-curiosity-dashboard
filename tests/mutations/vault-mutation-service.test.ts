@@ -104,6 +104,21 @@ describe('VaultMutationService.advanceStage', () => {
 });
 
 describe('VaultMutationService.setAssociationPath', () => {
+  it('requires the topic to remain the homepage focus when requested', async () => {
+    const vault = await topicVault();
+    await vault.create('scripts/new.md', 'new');
+    vault.metadata.set(TOPIC_PATH, { homepage_focus: false, stage: '选题' });
+
+    await expect(
+      new VaultMutationService(vault).setAssociationPath(
+        TOPIC_PATH,
+        'script_path',
+        'scripts/new.md',
+        { requireHomepageFocus: true },
+      ),
+    ).rejects.toThrow('Topic is no longer the homepage focus');
+    expect(vault.metadata.get(TOPIC_PATH)?.script_path).toBeUndefined();
+  });
   it('rejects an association path that does not exist', async () => {
     const vault = await topicVault();
 

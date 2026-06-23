@@ -28,9 +28,9 @@ export function renderDock(
     ? disabledItem('Ideas', 'lightbulb', '移动端只读，不能创建选题卡')
     : { action: handlers.createTopic, icon: 'lightbulb', label: 'Ideas' });
   items.push(fileItem('Mission', 'crosshair', topic?.path ?? null, '未设置当前作品', handlers));
-  items.push({ action: () => void handlers.selectTab('tasks'), icon: 'list-checks', label: 'Tasks' });
+  items.push({ action: () => handlers.selectTab('tasks'), icon: 'list-checks', label: 'Tasks' });
   items.push(associatedItem('Script', 'file-text', topic, 'scriptPath', model, handlers));
-  items.push({ action: () => void handlers.selectTab('data'), icon: 'chart-no-axes-combined', label: 'Data' });
+  items.push({ action: () => handlers.selectTab('data'), icon: 'chart-no-axes-combined', label: 'Data' });
   items.push(associatedItem('Review', 'clipboard-check', topic, 'reviewPath', model, handlers));
   items.push({ action: handlers.openSettings, icon: 'settings', label: 'Settings' });
 
@@ -52,7 +52,7 @@ function fileItem(
 ): DockItem {
   return path === null
     ? disabledItem(label, icon, reason)
-    : { action: () => void handlers.openPath(path), icon, label };
+    : { action: () => handlers.openPath(path), icon, label };
 }
 
 function associatedItem(

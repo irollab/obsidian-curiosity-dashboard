@@ -80,9 +80,9 @@ describe('LatestRefresh', () => {
     const firstRun = controller.run(() => first.promise);
     const secondRun = controller.run(() => second.promise);
     second.resolve('new');
-    await secondRun;
+    await expect(secondRun).resolves.toEqual({ status: 'success' });
     first.resolve('stale');
-    await firstRun;
+    await expect(firstRun).resolves.toEqual({ status: 'stale' });
 
     expect(loading).toHaveBeenCalledTimes(2);
     expect(rendered).toEqual(['new']);
@@ -98,18 +98,21 @@ describe('LatestRefresh', () => {
     const run = controller.run(() => pending.promise);
     controller.dispose();
     pending.reject(new Error('closed'));
-    await run;
+    await expect(run).resolves.toEqual({ status: 'stale' });
 
     expect(success).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
   });
 
-  it('renders a current request failure and resolves the refresh promise', async () => {
+  it('renders a current request failure and returns the real error outcome', async () => {
     const failure = new Error('load failed');
     const error = vi.fn();
     const controller = new LatestRefresh<string>({ loading: vi.fn(), success: vi.fn(), error });
 
-    await expect(controller.run(async () => Promise.reject(failure))).resolves.toBeUndefined();
+    await expect(controller.run(async () => Promise.reject(failure))).resolves.toEqual({
+      error: failure,
+      status: 'error',
+    });
     expect(error).toHaveBeenCalledWith(failure);
   });
 });

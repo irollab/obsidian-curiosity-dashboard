@@ -2,6 +2,9 @@ import type { DashboardModel, MetricRow } from '@/domain/models';
 
 type MetricKey = keyof MetricRow;
 
+const MAX_METRIC_ROWS = 12;
+const MAX_COMMENT_EVIDENCE = 8;
+
 const COLUMNS: ReadonlyArray<readonly [MetricKey, string]> = [
   ['platform', '平台'],
   ['collectedAt', '采集时间'],
@@ -50,8 +53,15 @@ export function renderChannelPulse(
     return;
   }
   const list = comments.createEl('ul');
-  for (const evidence of model.commentEvidence) {
+  for (const evidence of model.commentEvidence.slice(0, MAX_COMMENT_EVIDENCE)) {
     list.createEl('li').createEl('blockquote', { text: evidence });
+  }
+  const commentOverflow = model.commentEvidence.length - MAX_COMMENT_EVIDENCE;
+  if (commentOverflow > 0) {
+    comments.createEl('p', {
+      cls: 'curiosity-overflow-count',
+      text: `另有 ${commentOverflow} 条评论`,
+    });
   }
 }
 
@@ -66,8 +76,15 @@ function renderMetricsTable(parent: HTMLElement, rows: MetricRow[]): void {
     header.createEl('th', { text: label, attr: { scope: 'col' } });
   }
   const body = table.createEl('tbody');
-  for (const row of rows) {
+  for (const row of rows.slice(0, MAX_METRIC_ROWS)) {
     const tr = body.createEl('tr');
     for (const [key] of visible) tr.createEl('td', { text: row[key] ?? '—' });
+  }
+  const rowOverflow = rows.length - MAX_METRIC_ROWS;
+  if (rowOverflow > 0) {
+    parent.createEl('p', {
+      cls: 'curiosity-overflow-count',
+      text: `另有 ${rowOverflow} 条平台数据`,
+    });
   }
 }

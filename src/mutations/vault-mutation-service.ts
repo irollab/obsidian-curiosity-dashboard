@@ -36,10 +36,14 @@ export class VaultMutationService {
     path: string,
     field: AssociationField,
     value: string,
+    options: { requireHomepageFocus?: boolean } = {},
   ): Promise<void> {
     if (!this.vault.exists(value)) throw new Error('Associated path not found');
 
     await this.vault.updateFrontmatter(path, (frontmatter) => {
+      if (options.requireHomepageFocus === true && frontmatter.homepage_focus !== true) {
+        throw new Error('Topic is no longer the homepage focus');
+      }
       const existing = frontmatter[field];
       if (existing !== null && existing !== undefined && existing !== '' && existing !== value) {
         throw new Error('Association already set; use an explicit edit to replace it');

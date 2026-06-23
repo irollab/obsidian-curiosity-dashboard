@@ -36,24 +36,32 @@ export class CreateFileModal extends Modal {
   }
 
   override onOpen(): void {
-    this.contentEl.createEl('h2', { text: this.defaults.heading });
+    const titleId = 'curiosity-create-file-title';
+    const errorId = 'curiosity-create-file-error';
+    this.modalEl.setAttribute('aria-labelledby', titleId);
+    this.contentEl.createEl('h2', { text: this.defaults.heading, attr: { id: titleId } });
     new Setting(this.contentEl)
       .setName('期数')
-      .addText((text) =>
+      .addText((text) => {
+        labelInput(text, '期数', errorId);
         text.setValue(this.issueInput).onChange((value) => {
           this.issueInput = value.trim();
           this.updateGeneratedPath();
-        }));
+        });
+      });
     new Setting(this.contentEl)
       .setName('标题')
-      .addText((text) =>
+      .addText((text) => {
+        labelInput(text, '标题', errorId);
         text.setValue(this.title).onChange((value) => {
           this.title = value;
           this.updateGeneratedPath();
-        }));
+        });
+      });
     new Setting(this.contentEl)
       .setName('目标路径')
       .addText((text) => {
+        labelInput(text, '目标路径', errorId);
         this.targetText = text;
         text.setValue(this.targetPath).onChange((value) => {
           this.pathManuallyEdited = true;
@@ -63,7 +71,7 @@ export class CreateFileModal extends Modal {
 
     const error = this.contentEl.createEl('p', {
       cls: 'curiosity-form-error',
-      attr: { 'aria-live': 'polite', role: 'alert' },
+      attr: { 'aria-live': 'polite', id: errorId, role: 'alert' },
     });
     new Setting(this.contentEl)
       .addButton((button) =>
@@ -122,6 +130,11 @@ export class CreateFileModal extends Modal {
     this.resolveResult(value);
     return true;
   }
+}
+
+function labelInput(text: TextComponent, label: string, errorId: string): void {
+  text.inputEl.setAttribute('aria-label', label);
+  text.inputEl.setAttribute('aria-describedby', errorId);
 }
 
 function parsePositiveSafeInteger(value: string): number | null {

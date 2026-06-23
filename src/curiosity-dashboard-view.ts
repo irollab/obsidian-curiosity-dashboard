@@ -1,9 +1,12 @@
 import { ItemView, Notice, Platform, type WorkspaceLeaf } from 'obsidian';
 
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
-import { sanitizeTitle } from '@/mutations/template-creation-service';
+import {
+  sanitizeTitle,
+  TemplateNotFoundError,
+} from '@/mutations/template-creation-service';
 import type { Stage } from '@/domain/stages';
-import { LatestRefresh } from '@/refresh-controller';
+import { LatestRefresh, type RefreshOutcome } from '@/refresh-controller';
 import type { DashboardSettings } from '@/settings';
 import { DashboardRenderer, type AssociationField } from '@/ui/dashboard-renderer';
 import { ConfirmStageModal } from '@/ui/confirm-stage-modal';
@@ -20,6 +23,7 @@ export class CuriosityDashboardView extends ItemView {
   private persistedTabRevision = 0;
   private tabRevision = 0;
   private lastModel: DashboardModel | null = null;
+  private creationPromise: Promise<void> | null = null;
   private readonly refreshController: LatestRefresh<DashboardModel>;
   private readonly renderer = new DashboardRenderer();
 
@@ -59,14 +63,14 @@ export class CuriosityDashboardView extends ItemView {
     this.contentEl.empty();
   }
 
-  async refresh(): Promise<void> {
+  async refresh(): Promise<RefreshOutcome> {
     if (Platform.isMobile && !this.plugin.settings.enableMobileView) {
       this.refreshController.invalidate();
       this.renderMobileDisabled();
-      return;
+      return { status: 'success' };
     }
 
-    await this.refreshController.run(() =>
+    return this.refreshController.run(() =>
       this.plugin.dataService().load(Platform.isMobile),
     );
   }
@@ -101,9 +105,9 @@ export class CuriosityDashboardView extends ItemView {
       selectTab: (tab) => this.selectTab(tab),
       setAssociation: (topicPath, field, value) =>
         this.setAssociation(topicPath, field, value),
-      createTopic: () => this.openCreate('topic', null),
-      createScript: (topic) => this.openCreate('script', topic),
-      createReview: (topic) => this.openCreate('review', topic),
+      createTopic: () => this.runCreate('topic', null),
+      createScript: (topic) => this.runCreate('script', topic),
+      createReview: (topic) => this.runCreate('review', topic),
     }, this.activeTab);
     if (focusActiveTab) activeButton.focus();
   }
@@ -117,6 +121,7 @@ export class CuriosityDashboardView extends ItemView {
   }
 
   private async toggleTask(path: string, task: ChecklistTask): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
     try {
       await this.plugin.mutationService().toggleTask(path, task);
       await this.refresh();
@@ -126,7 +131,9 @@ export class CuriosityDashboardView extends ItemView {
   }
 
   private async confirmAdvance(path: string, stage: Stage): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
     if (!await ConfirmStageModal.ask(this.app, stage)) return;
+    if (this.rejectReadOnlyWrite()) return;
     try {
       await this.plugin.mutationService().advanceStage(path, stage);
       await this.refresh();
@@ -135,16 +142,27 @@ export class CuriosityDashboardView extends ItemView {
     }
   }
 
+  private runCreate(
+    kind: 'topic' | 'script' | 'review',
+    topic: TopicRecord | null,
+  ): Promise<void> {
+    if (this.creationPromise !== null) return this.creationPromise;
+    const operation = this.openCreate(kind, topic);
+    this.creationPromise = operation;
+    const clear = (): void => {
+      if (this.creationPromise === operation) this.creationPromise = null;
+    };
+    void operation.then(clear, clear);
+    return operation;
+  }
+
   private async openCreate(
     kind: 'topic' | 'script' | 'review',
     topic: TopicRecord | null,
   ): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
     if (this.lastModel === null) {
       new Notice('Dashboard 数据尚未加载，不能创建文件。');
-      return;
-    }
-    if (this.lastModel.mobileReadOnly) {
-      new Notice('移动端只读，不能创建文件。');
       return;
     }
     if (kind !== 'topic') {
@@ -159,7 +177,8 @@ export class CuriosityDashboardView extends ItemView {
     const defaults = this.createDefaults(kind, topic);
     const request = await CreateFileModal.ask(this.app, defaults);
     if (request === null) return;
-    if (this.lastModel === null || this.lastModel.mobileReadOnly) {
+    if (this.rejectReadOnlyWrite()) return;
+    if (this.lastModel === null) {
       new Notice('Dashboard 状态已变化，已取消创建。');
       return;
     }
@@ -172,39 +191,55 @@ export class CuriosityDashboardView extends ItemView {
       topic = currentTopic;
     }
 
+    let createdPath: string;
     try {
-      await this.plugin.templateService().create(request);
+      createdPath = await this.plugin.templateService().create(request);
     } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        this.openSettings();
+        new Notice(`创建失败：模板不存在：${error.path}。已打开插件设置。`);
+        return;
+      }
       this.showActionError('创建失败', error);
       return;
     }
 
     let associationError: unknown = null;
     if (kind !== 'topic' && topic !== null) {
+      let authoritativeTopic: TopicRecord | null = null;
       try {
-        await this.plugin.mutationService().setAssociationPath(
-          topic.path,
-          kind === 'script' ? 'script_path' : 'review_path',
-          request.targetPath,
-        );
+        const authoritative = await this.plugin.dataService().load(Platform.isMobile);
+        authoritativeTopic = currentFocusTopic(authoritative);
       } catch (error) {
-        associationError = error;
+        associationError = new Error(`无法核对当前作品：${actionErrorMessage(error)}`);
+      }
+      if (associationError === null) {
+        if (authoritativeTopic === null || authoritativeTopic.path !== topic.path) {
+          associationError = new Error('当前作品已变化，文件未关联');
+        } else {
+          try {
+            await this.plugin.mutationService().setAssociationPath(
+              topic.path,
+              kind === 'script' ? 'script_path' : 'review_path',
+              createdPath,
+              { requireHomepageFocus: true },
+            );
+          } catch (error) {
+            associationError = error;
+          }
+        }
       }
     }
 
     let openError: unknown = null;
     try {
-      await this.app.workspace.openLinkText(request.targetPath, '', false);
+      await this.app.workspace.openLinkText(createdPath, '', false);
     } catch (error) {
       openError = error;
     }
 
-    let refreshError: unknown = null;
-    try {
-      await this.refresh();
-    } catch (error) {
-      refreshError = error;
-    }
+    const refreshOutcome = await this.refresh();
+    const refreshError = refreshOutcome.status === 'error' ? refreshOutcome.error : null;
 
     if (associationError !== null || openError !== null || refreshError !== null) {
       this.showPartialCreationResult(kind, associationError, openError, refreshError);
@@ -261,11 +296,11 @@ export class CuriosityDashboardView extends ItemView {
   ): void {
     const details: string[] = [];
     if (associationError !== null) {
-      details.push(`关联失败：${errorMessage(associationError)}`);
+      details.push(`关联失败：${actionErrorMessage(associationError)}`);
     }
-    if (openError !== null) details.push(`无法打开：${errorMessage(openError)}`);
+    if (openError !== null) details.push(`无法打开：${actionErrorMessage(openError)}`);
     if (refreshError !== null) {
-      details.push(`无法刷新 Dashboard：${errorMessage(refreshError)}`);
+      details.push(`无法刷新 Dashboard：${actionErrorMessage(refreshError)}`);
     }
     const associated = kind !== 'topic' && associationError === null;
     new Notice(`文件已创建${associated ? '并关联' : ''}，但${details.join('；且')}`);
@@ -317,8 +352,14 @@ export class CuriosityDashboardView extends ItemView {
     field: AssociationField,
     value: string,
   ): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
     try {
-      await this.plugin.mutationService().setAssociationPath(topicPath, field, value);
+      await this.plugin.mutationService().setAssociationPath(
+        topicPath,
+        field,
+        value,
+        { requireHomepageFocus: true },
+      );
       await this.refresh();
     } catch (error) {
       this.showActionError('无法保存关联路径', error);
@@ -326,10 +367,13 @@ export class CuriosityDashboardView extends ItemView {
   }
 
   private showActionError(context: string, error: unknown): void {
-    const detail = error instanceof Error && error.message.trim().length > 0
-      ? error.message
-      : '未知错误';
-    new Notice(`${context}：${detail}`);
+    new Notice(`${context}：${actionErrorMessage(error)}`);
+  }
+
+  private rejectReadOnlyWrite(): boolean {
+    if (!Platform.isMobile && this.lastModel?.mobileReadOnly !== true) return false;
+    new Notice('移动端只读，不能修改文件。');
+    return true;
   }
 
   private renderError(error: unknown): void {
@@ -353,6 +397,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
     : '读取本地数据时发生未知错误，请重试。';
+}
+
+function actionErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : '未知错误';
 }
 
 function nextVisibleIssue(model: DashboardModel | null): number {

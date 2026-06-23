@@ -7,6 +7,13 @@ export interface CreateRequest {
   issue: number;
 }
 
+export class TemplateNotFoundError extends Error {
+  constructor(readonly path: string) {
+    super(`Template not found: ${path}`);
+    this.name = 'TemplateNotFoundError';
+  }
+}
+
 const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i;
 const KNOWN_TEMPLATE_TOKEN = /\{\{(title|issue|date)\}\}/g;
 const FORBIDDEN_FILENAME_CHARACTERS = /[\u0000-\u001F\u007F-\u009F<>:"/\\|?*]+/g;
@@ -36,7 +43,7 @@ export class TemplateCreationService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  async create(request: CreateRequest): Promise<void> {
+  async create(request: CreateRequest): Promise<string> {
     const templatePath = normalizeVaultPath(request.templatePath);
     const targetPath = normalizeVaultPath(request.targetPath);
 
@@ -72,6 +79,7 @@ export class TemplateCreationService {
     });
 
     await this.vault.create(targetPath, content);
+    return targetPath;
   }
 }
 
@@ -112,7 +120,7 @@ const resolveMarkdownPath = (requestedPath: string, markdownPaths: string[]): st
   }
   const uniqueMatch = foldedMatches[0];
   if (uniqueMatch === undefined) {
-    throw new Error(`Template not found: ${requestedPath}`);
+    throw new TemplateNotFoundError(requestedPath);
   }
   return uniqueMatch;
 };

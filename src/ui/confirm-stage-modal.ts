@@ -21,7 +21,9 @@ export class ConfirmStageModal extends Modal {
 
   override onOpen(): void {
     const next = nextStage(this.current);
-    this.contentEl.createEl('h2', { text: '推进制作阶段' });
+    const titleId = 'curiosity-confirm-stage-title';
+    this.modalEl.setAttribute('aria-labelledby', titleId);
+    this.contentEl.createEl('h2', { text: '推进制作阶段', attr: { id: titleId } });
     this.contentEl.createEl('p', {
       text: next === null
         ? '当前已经是最终阶段。'

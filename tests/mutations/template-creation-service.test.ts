@@ -110,14 +110,24 @@ describe('TemplateCreationService', () => {
     vault.files.set(TEMPLATE_PATH, '# {{title}}');
     const service = new TemplateCreationService(vault);
 
-    await service.create(
+    await expect(service.create(
       createRequest({
         templatePath: '99-模板\\topic.md',
         targetPath: '10-选题池\\39-Test.md',
       }),
-    );
+    )).resolves.toBe('10-选题池/39-Test.md');
 
     await expect(vault.read('10-选题池/39-Test.md')).resolves.toBe('# Test');
+  });
+
+  it('throws a typed error when the template is missing', async () => {
+    const vault = new FakeVaultGateway();
+    const service = new TemplateCreationService(vault);
+
+    await expect(service.create(createRequest({ templatePath: 'missing.md' }))).rejects.toMatchObject({
+      name: 'TemplateNotFoundError',
+      path: 'missing.md',
+    });
   });
 
   it.each([
