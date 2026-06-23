@@ -7,13 +7,29 @@ import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { DEFAULT_SETTINGS } from '@/settings';
 
 const obsidianMock = vi.hoisted(() => {
+  class FakeStyle {
+    readonly properties = new Map<string, string>();
+
+    setProperty(name: string, value: string): void {
+      this.properties.set(name, value);
+    }
+  }
+
   class FakeElement {
     readonly children: FakeElement[] = [];
     readonly classList = new Set<string>();
     readonly dataset: Record<string, string> = {};
-    readonly listeners = new Map<string, () => void>();
+    readonly attributes = new Map<string, string>();
+    readonly listeners = new Map<string, Array<(event: { key: string; preventDefault(): void }) => void>>();
+    readonly style = new FakeStyle();
+    disabled = false;
     text = '';
     tag = 'div';
+    type = '';
+
+    set innerHTML(_value: string) {
+      throw new Error('Unsafe innerHTML was used');
+    }
 
     empty(): void {
       this.children.length = 0;
@@ -27,40 +43,72 @@ const obsidianMock = vi.hoisted(() => {
       for (const item of classes) this.classList.delete(item);
     }
 
-    createDiv(options: { cls?: string; text?: string } = {}): FakeElement {
+    createDiv(options: ElementOptions = {}): FakeElement {
       return this.createEl('div', options);
     }
 
-    createEl(
-      tag: string,
-      options: { cls?: string; text?: string; type?: string } = {},
-    ): FakeElement {
+    createSpan(options: ElementOptions = {}): FakeElement {
+      return this.createEl('span', options);
+    }
+
+    createEl(tag: string, options: ElementOptions = {}): FakeElement {
       const child = new FakeElement();
       child.tag = tag;
       child.text = options.text ?? '';
-      if (options.cls !== undefined) child.addClass(...options.cls.split(' '));
+      child.type = options.type ?? '';
+      if (options.cls !== undefined) child.addClass(...options.cls.split(/\s+/).filter(Boolean));
+      for (const [name, value] of Object.entries(options.attr ?? {})) child.setAttr(name, value);
       this.children.push(child);
       return child;
     }
 
-    addEventListener(name: string, listener: () => void): void {
-      this.listeners.set(name, listener);
+    setAttr(name: string, value: string): void {
+      this.attributes.set(name, value);
+    }
+
+    getAttr(name: string): string | null {
+      return this.attributes.get(name) ?? null;
+    }
+
+    addEventListener(
+      name: string,
+      listener: (event: { key: string; preventDefault(): void }) => void,
+    ): void {
+      const listeners = this.listeners.get(name) ?? [];
+      listeners.push(listener);
+      this.listeners.set(name, listeners);
     }
 
     click(): void {
-      this.listeners.get('click')?.();
+      if (this.disabled) return;
+      const event = { key: '', preventDefault: () => undefined };
+      for (const listener of this.listeners.get('click') ?? []) listener(event);
     }
   }
 
-  return { FakeElement, platform: { isMobile: false } };
+  interface ElementOptions {
+    attr?: Record<string, string>;
+    cls?: string;
+    text?: string;
+    type?: string;
+  }
+
+  return { FakeElement, notices: [] as string[], platform: { isMobile: false } };
 });
 
 vi.mock('obsidian', () => ({
   ItemView: class {
     readonly contentEl = new obsidianMock.FakeElement();
-    constructor(readonly leaf: unknown) {}
+    readonly app: unknown;
+    constructor(readonly leaf: { app?: unknown }) {
+      this.app = leaf.app;
+    }
   },
-  Notice: class {},
+  Notice: class {
+    constructor(message: string) {
+      obsidianMock.notices.push(message);
+    }
+  },
   Platform: obsidianMock.platform,
   Plugin: class {},
   PluginSettingTab: class {},
@@ -83,15 +131,31 @@ const model: DashboardModel = {
   thisWeek: [],
 };
 
-function makeView(load: () => Promise<DashboardModel>, enableMobileView = true) {
+function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = true) {
+  const mutation = {
+    advanceStage: vi.fn(async () => '发布' as const),
+    setAssociationPath: vi.fn(async () => undefined),
+    toggleTask: vi.fn(async () => undefined),
+  };
+  const saveSettings = vi.fn(async () => undefined);
+  const openLinkText = vi.fn(async () => undefined);
+  const setting = { open: vi.fn(), openTabById: vi.fn() };
   const plugin = {
     dataService: () => ({ load }),
+    manifest: { id: 'curiosity-dashboard' },
+    mutationService: () => mutation,
+    saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
   };
-  return new CuriosityDashboardView(
-    {} as WorkspaceLeaf,
+  const view = new CuriosityDashboardView(
+    { app: { setting, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
     plugin as never,
   ) as CuriosityDashboardView & { contentEl: InstanceType<typeof obsidianMock.FakeElement> };
+  return { mutation, openLinkText, plugin, saveSettings, setting, view };
+}
+
+function makeView(load: () => Promise<DashboardModel>, enableMobileView = true) {
+  return makeHarness(load, enableMobileView).view;
 }
 
 function findByText(
@@ -109,6 +173,8 @@ function findByText(
 describe('CuriosityDashboardView', () => {
   beforeEach(() => {
     obsidianMock.platform.isMobile = false;
+    obsidianMock.notices.length = 0;
+    vi.unstubAllGlobals();
   });
 
   it('renders loading before replacing it with the loaded shell', async () => {
@@ -166,5 +232,71 @@ describe('CuriosityDashboardView', () => {
     await refresh;
 
     expect(view.contentEl.children).toHaveLength(0);
+  });
+
+  it('persists a selected tab and refreshes the rendered model', async () => {
+    const load = vi.fn(async () => model);
+    const { plugin, saveSettings, view } = makeHarness(load);
+    await view.refresh();
+
+    findByText(view.contentEl, 'Overview')?.click();
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+
+    expect(plugin.settings.defaultTab).toBe('overview');
+    expect(view.contentEl.children[0]?.dataset.activeTab).toBe('overview');
+  });
+
+  it('passes a full task snapshot to the mutation and reports mutation errors with Notice', async () => {
+    const task = { checked: false, line: 9, text: '验证交互' };
+    const readyModel: DashboardModel = {
+      ...model,
+      focus: {
+        kind: 'ready',
+        topic: {
+          path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
+          status: '已立项', stage: '制作', priority: null, dueDate: null,
+          nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+          reviewPath: null,
+        },
+      },
+      tasks: [task],
+    };
+    const harness = makeHarness(async () => readyModel);
+    harness.mutation.toggleTask.mockRejectedValueOnce(new Error('Task changed; refresh and try again'));
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, task.text)?.click();
+    await vi.waitFor(() => expect(harness.mutation.toggleTask).toHaveBeenCalledWith('10-选题池/39.md', task));
+    await vi.waitFor(() => expect(obsidianMock.notices).toContain(
+      '无法更新任务：Task changed; refresh and try again',
+    ));
+  });
+
+  it('requires confirmation before advancing and surfaces file-open failures', async () => {
+    const readyModel: DashboardModel = {
+      ...model,
+      focus: {
+        kind: 'ready',
+        topic: {
+          path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
+          status: '已立项', stage: '制作', priority: null, dueDate: null,
+          nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+          reviewPath: null,
+        },
+      },
+    };
+    const harness = makeHarness(async () => readyModel);
+    harness.openLinkText.mockRejectedValueOnce(new Error('cannot open'));
+    vi.stubGlobal('window', { confirm: vi.fn(() => true) });
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, '查看选题卡')?.click();
+    await vi.waitFor(() => expect(obsidianMock.notices).toContain('无法打开文件：cannot open'));
+    findByText(harness.view.contentEl, '推进阶段')?.click();
+    await vi.waitFor(() => expect(harness.mutation.advanceStage).toHaveBeenCalledWith(
+      '10-选题池/39.md',
+      '制作',
+    ));
   });
 });

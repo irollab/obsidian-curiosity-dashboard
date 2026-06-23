@@ -1,8 +1,10 @@
-import { ItemView, Platform, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, Platform, type WorkspaceLeaf } from 'obsidian';
 
-import type { DashboardModel } from '@/domain/models';
+import type { ChecklistTask, DashboardModel } from '@/domain/models';
+import type { Stage } from '@/domain/stages';
 import { LatestRefresh } from '@/refresh-controller';
 import type { DashboardSettings } from '@/settings';
+import { DashboardRenderer, type AssociationField } from '@/ui/dashboard-renderer';
 
 import type CuriosityDashboardPlugin from './main';
 import { DASHBOARD_VIEW_TYPE } from './constants';
@@ -12,6 +14,7 @@ type DashboardTab = DashboardSettings['defaultTab'];
 export class CuriosityDashboardView extends ItemView {
   private activeTab: DashboardTab;
   private readonly refreshController: LatestRefresh<DashboardModel>;
+  private readonly renderer = new DashboardRenderer();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -80,10 +83,90 @@ export class CuriosityDashboardView extends ItemView {
 
   private renderModel(model: DashboardModel): void {
     this.prepareContent('curiosity-dashboard--ready');
-    const shell = this.contentEl.createDiv({ cls: 'curiosity-dashboard-shell' });
-    shell.dataset.activeTab = this.activeTab;
-    shell.createEl('h1', { text: 'Chase your curiosity' });
-    shell.createEl('p', { text: focusSummary(model) });
+    this.renderer.render(this.contentEl, model, {
+      openPath: (path) => this.openPath(path),
+      toggleTask: (path, task) => this.toggleTask(path, task),
+      confirmAdvance: (path, stage) => this.confirmAdvance(path, stage),
+      openSettings: () => this.openSettings(),
+      selectTab: (tab) => this.selectTab(tab),
+      setAssociation: (topicPath, field, value) =>
+        this.setAssociation(topicPath, field, value),
+    }, this.activeTab);
+  }
+
+  private async openPath(path: string): Promise<void> {
+    try {
+      await this.app.workspace.openLinkText(path, '', false);
+    } catch (error) {
+      this.showActionError('无法打开文件', error);
+    }
+  }
+
+  private async toggleTask(path: string, task: ChecklistTask): Promise<void> {
+    try {
+      await this.plugin.mutationService().toggleTask(path, task);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('无法更新任务', error);
+    }
+  }
+
+  private async confirmAdvance(path: string, stage: Stage): Promise<void> {
+    if (!window.confirm(`从「${stage}」推进到下一阶段？`)) return;
+    try {
+      await this.plugin.mutationService().advanceStage(path, stage);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('无法推进阶段', error);
+    }
+  }
+
+  private openSettings(): void {
+    try {
+      const setting = (this.app as typeof this.app & {
+        setting?: { open(): void; openTabById(id: string): void };
+      }).setting;
+      if (setting === undefined) throw new Error('当前 Obsidian 版本未提供设置入口');
+      setting.open();
+      setting.openTabById(this.plugin.manifest.id);
+    } catch (error) {
+      this.showActionError('无法打开插件设置', error);
+    }
+  }
+
+  private async selectTab(tab: DashboardTab): Promise<void> {
+    const previousTab = this.activeTab;
+    const previousDefault = this.plugin.settings.defaultTab;
+    this.activeTab = tab;
+    this.plugin.settings.defaultTab = tab;
+    try {
+      await this.plugin.saveSettings();
+      await this.refresh();
+    } catch (error) {
+      this.activeTab = previousTab;
+      this.plugin.settings.defaultTab = previousDefault;
+      this.showActionError('无法保存当前标签', error);
+    }
+  }
+
+  private async setAssociation(
+    topicPath: string,
+    field: AssociationField,
+    value: string,
+  ): Promise<void> {
+    try {
+      await this.plugin.mutationService().setAssociationPath(topicPath, field, value);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('无法保存关联路径', error);
+    }
+  }
+
+  private showActionError(context: string, error: unknown): void {
+    const detail = error instanceof Error && error.message.trim().length > 0
+      ? error.message
+      : '未知错误';
+    new Notice(`${context}：${detail}`);
   }
 
   private renderError(error: unknown): void {
@@ -101,13 +184,6 @@ export class CuriosityDashboardView extends ItemView {
     state.createEl('h2', { text: '移动端视图已关闭' });
     state.createEl('p', { text: '请在插件设置中启用移动端简化视图。' });
   }
-}
-
-function focusSummary(model: DashboardModel): string {
-  if (model.focus.kind === 'ready') return model.focus.topic.title;
-  if (model.focus.kind === 'multiple') return '检测到多个当前作品，请先解决焦点冲突。';
-  if (model.focus.kind === 'invalid-stage') return '当前作品的阶段无法识别。';
-  return '尚未设置当前作品。';
 }
 
 function errorMessage(error: unknown): string {
