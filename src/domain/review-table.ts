@@ -2,12 +2,13 @@ import type { MetricRow } from './models';
 
 const aliases = {
   platform: ['平台'],
-  collectedAt: ['采集时间', '时间点'],
+  collectedAt: ['采集时间'],
+  snapshotTime: ['采集时间', '时间点'],
   views: ['播放/观看', '播放/阅读', '播放', '观看'],
   likes: ['点赞'],
   favorites: ['收藏'],
   comments: ['评论'],
-  shares: ['分享', '转发'],
+  shares: ['分享', '转发', '分享/转发'],
 } as const;
 
 interface MarkdownTable {
@@ -33,8 +34,8 @@ export function parseReviewMetrics(markdown: string): MetricRow[] {
       continue;
     }
 
-    const collectedAtColumn = column(table.headers, aliases.collectedAt);
-    if (collectedAtColumn < 0) continue;
+    const snapshotTimeColumn = column(table.headers, aliases.snapshotTime);
+    if (snapshotTimeColumn < 0) continue;
     const platform = nearestPlatform(lines, table.startLine);
     if (platform === null) continue;
     const latest = [...table.rows]
@@ -86,7 +87,7 @@ function column(headers: string[], names: readonly string[]): number {
 
 function nearestPlatform(lines: string[], tableStartLine: number): string | null {
   for (let index = tableStartLine - 1; index >= 0; index -= 1) {
-    const match = /^\s*平台\s*[：:]\s*(\S.*?)\s*$/.exec(lines[index] ?? '');
+    const match = /^\s*(?:[-+*]\s+)?平台\s*[：:]\s*(\S.*?)\s*$/.exec(lines[index] ?? '');
     const platform = match?.[1]?.trim();
     if (platform !== undefined && platform.length > 0) return platform;
   }

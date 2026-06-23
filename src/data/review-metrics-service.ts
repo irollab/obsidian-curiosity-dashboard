@@ -15,7 +15,7 @@ export class ReviewMetricsService {
   ) {}
 
   async load(explicitPath: string | null): Promise<ReviewResult> {
-    const explicit = explicitPath === null ? null : this.eligiblePath(explicitPath);
+    const explicit = explicitPath === null ? null : this.safeMarkdownPath(explicitPath);
     const path = explicit ?? this.latestDatedReview();
     if (path === null) return { path: null, metrics: [], commentEvidence: [] };
 
@@ -30,21 +30,31 @@ export class ReviewMetricsService {
   private latestDatedReview(): string | null {
     return this.vault
       .listMarkdownPaths()
-      .map((path) => this.eligiblePath(path))
+      .map((path) => this.eligibleLatestPath(path))
       .filter((path): path is string => path !== null)
       .map((path) => ({ path, date: reviewDate(this.vault.getFrontmatter(path)) }))
       .filter((item): item is { path: string; date: number } => item.date !== null)
       .sort((left, right) => right.date - left.date || comparePath(left.path, right.path))[0]?.path ?? null;
   }
 
-  private eligiblePath(path: string): string | null {
-    const normalizedPath = normalizeVaultPath(path);
+  private eligibleLatestPath(path: string): string | null {
+    const normalizedPath = this.safeMarkdownPath(path);
     const normalizedDirectory = normalizeVaultPath(this.reviewDir);
     if (
       normalizedPath === null ||
       normalizedDirectory === null ||
+      !isInsideDirectory(normalizedPath, normalizedDirectory)
+    ) {
+      return null;
+    }
+    return normalizedPath;
+  }
+
+  private safeMarkdownPath(path: string): string | null {
+    const normalizedPath = normalizeVaultPath(path);
+    if (
+      normalizedPath === null ||
       !normalizedPath.toLowerCase().endsWith('.md') ||
-      !isInsideDirectory(normalizedPath, normalizedDirectory) ||
       !this.vault.exists(normalizedPath)
     ) {
       return null;
@@ -82,6 +92,7 @@ function parseDate(value: unknown): number | null {
 }
 
 function normalizeVaultPath(path: string): string | null {
+  if (/^[\\/]/.test(path) || /^[A-Za-z]:[\\/]/.test(path)) return null;
   const normalized = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
   if (normalized.length === 0) return '';
   const segments = normalized.split('/');
@@ -102,15 +113,18 @@ function comparePath(left: string, right: string): number {
 function extractCommentEvidence(markdown: string): string[] {
   const supportedHeadings = new Set(['评论区需求', '评论反馈', '评论样本']);
   const evidence: string[] = [];
-  let active = false;
+  let activeLevel: number | null = null;
 
   for (const line of markdown.split(/\r?\n/)) {
     const heading = /^\s*(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading !== null) {
-      active = (heading[1]?.length ?? 0) >= 2 && supportedHeadings.has(heading[2]?.trim() ?? '');
+      const level = heading[1]?.length ?? 0;
+      const isSupported = level >= 2 && supportedHeadings.has(heading[2]?.trim() ?? '');
+      if (isSupported) activeLevel = level;
+      else if (activeLevel !== null && level <= activeLevel) activeLevel = null;
       continue;
     }
-    if (!active) continue;
+    if (activeLevel === null) continue;
     const bullet = /^\s*[-+*]\s+(.+?)\s*$/.exec(line)?.[1]?.trim();
     if (bullet !== undefined && bullet.length > 0) evidence.push(bullet);
   }

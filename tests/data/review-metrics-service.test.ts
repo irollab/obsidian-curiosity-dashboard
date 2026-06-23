@@ -7,7 +7,7 @@ describe('ReviewMetricsService', () => {
     const vault = new FakeVaultGateway();
     vault.files.set(
       '60-发布复盘/explicit.md',
-      '## 评论区需求\r\n- 想要安装教程\r\n* 希望展示完整配置\r\n\r\n### 其他\r\n- 不应收集',
+      '## 评论区需求\r\n- 想要安装教程\r\n* 希望展示完整配置\r\n\r\n## 其他\r\n- 不应收集',
     );
     vault.metadata.set('60-发布复盘/explicit.md', { type: '发布复盘' });
 
@@ -20,19 +20,37 @@ describe('ReviewMetricsService', () => {
     });
   });
 
-  it('falls back from an unsafe explicit path to the latest dated review', async () => {
+  it('prefers a safe explicit Markdown review anywhere in the vault', async () => {
     const vault = reviewVault();
-    vault.files.set('outside.md', '## 评论区需求\n- 外部文件');
-    vault.metadata.set('outside.md', { created: '2099-01-01' });
+    vault.files.set('自定义复盘/outside.md', '## 评论区需求\n- 外部文件');
+    vault.metadata.set('自定义复盘/outside.md', { created: '2020-01-01' });
 
     const service = new ReviewMetricsService(vault, '60-发布复盘');
-    await expect(service.load('outside.md')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
+    await expect(service.load('自定义复盘/outside.md')).resolves.toEqual({
+      path: '自定义复盘/outside.md',
+      metrics: [],
+      commentEvidence: ['外部文件'],
     });
+  });
+
+  it('falls back from unsafe or non-Markdown explicit paths to the latest dated review', async () => {
+    const vault = reviewVault();
+    vault.files.set('outside.md', 'outside');
+    vault.metadata.set('outside.md', { created: '2099-01-01' });
+    vault.files.set('C:/outside.md', 'drive absolute');
+    vault.metadata.set('C:/outside.md', { created: '2099-01-02' });
+
+    const service = new ReviewMetricsService(vault, '60-发布复盘');
     await expect(service.load('60-发布复盘/not-markdown.txt')).resolves.toMatchObject({
       path: '60-发布复盘/new.md',
     });
     await expect(service.load('60-发布复盘/../outside.md')).resolves.toMatchObject({
+      path: '60-发布复盘/new.md',
+    });
+    await expect(service.load('/outside.md')).resolves.toMatchObject({
+      path: '60-发布复盘/new.md',
+    });
+    await expect(service.load('C:\\outside.md')).resolves.toMatchObject({
       path: '60-发布复盘/new.md',
     });
   });
@@ -82,7 +100,7 @@ describe('ReviewMetricsService', () => {
     expect(result.path).toBe('60-发布复盘/a.md');
   });
 
-  it('collects evidence from every exact supported section and stops at any next heading', async () => {
+  it('collects every exact supported section and stops at a same-level heading', async () => {
     const vault = new FakeVaultGateway();
     vault.files.set(
       '60-发布复盘/comments.md',
@@ -91,7 +109,7 @@ describe('ReviewMetricsService', () => {
         '- 一级标题不匹配',
         '## 评论反馈',
         '+ 需要模板',
-        '### 子标题会终止',
+        '## 同级标题会终止',
         '- 不应收集',
         '## 评论样本',
         '  - 原始评论 A',
@@ -108,6 +126,40 @@ describe('ReviewMetricsService', () => {
     const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
 
     expect(result.commentEvidence).toEqual(['需要模板', '原始评论 A', '原始评论 B']);
+  });
+
+  it('keeps evidence through deeper headings and stops at the same or a higher level', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(
+      '60-发布复盘/nested-comments.md',
+      [
+        '### 评论反馈',
+        '- 顶层证据',
+        '#### 高频需求',
+        '- 子标题证据',
+        '##### 评论样本',
+        '- 新目标标题证据',
+        '###### 细节',
+        '- 更深层证据',
+        '##### 同级结束',
+        '- 不应收集',
+        '## 评论区需求',
+        '- 第二段证据',
+        '# 上级结束',
+        '- 仍不应收集',
+      ].join('\n'),
+    );
+    vault.metadata.set('60-发布复盘/nested-comments.md', { created: '2026-06-23' });
+
+    const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
+
+    expect(result.commentEvidence).toEqual([
+      '顶层证据',
+      '子标题证据',
+      '新目标标题证据',
+      '更深层证据',
+      '第二段证据',
+    ]);
   });
 
   it('returns an empty result when no eligible review exists', async () => {

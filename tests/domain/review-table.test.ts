@@ -55,7 +55,7 @@ describe('parseReviewMetrics', () => {
     ]);
   });
 
-  it('uses 时间点 as the raw collection label when 采集时间 is absent', () => {
+  it('does not present 时间点 as an explicit collection timestamp', () => {
     const markdown = [
       '平台: YouTube',
       '时间点 | 观看 | 点赞',
@@ -65,10 +65,31 @@ describe('parseReviewMetrics', () => {
 
     expect(parseReviewMetrics(markdown)[0]).toMatchObject({
       platform: 'YouTube',
-      collectedAt: '发布后 1 天',
+      collectedAt: null,
       views: '80',
       likes: '4',
     });
+  });
+
+  it('supports a list-form platform declaration and 分享/转发表头', () => {
+    const markdown = [
+      '- 平台：抖音',
+      '| 时间点 | 播放 | 分享/转发 |',
+      '| --- | ---: | ---: |',
+      '| 24小时 | 300 | 12 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([
+      {
+        platform: '抖音',
+        collectedAt: null,
+        views: '300',
+        likes: null,
+        favorites: null,
+        comments: null,
+        shares: '12',
+      },
+    ]);
   });
 
   it('skips empty and malformed rows without filling missing values', () => {
