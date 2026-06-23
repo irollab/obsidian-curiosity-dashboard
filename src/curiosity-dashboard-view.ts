@@ -196,8 +196,10 @@ export class CuriosityDashboardView extends ItemView {
       createdPath = await this.plugin.templateService().create(request);
     } catch (error) {
       if (error instanceof TemplateNotFoundError) {
-        this.openSettings();
-        new Notice(`创建失败：模板不存在：${error.path}。已打开插件设置。`);
+        const opened = this.openSettings(true);
+        new Notice(opened
+          ? `创建失败：模板不存在：${error.path}。已打开插件设置。`
+          : `创建失败：模板缺失且无法自动打开，请手动打开设置：${error.path}。`);
         return;
       }
       this.showActionError('创建失败', error);
@@ -306,7 +308,7 @@ export class CuriosityDashboardView extends ItemView {
     new Notice(`文件已创建${associated ? '并关联' : ''}，但${details.join('；且')}`);
   }
 
-  private openSettings(): void {
+  private openSettings(silent = false): boolean {
     try {
       const setting = (this.app as typeof this.app & {
         setting?: { open?: unknown; openTabById?: unknown };
@@ -320,8 +322,10 @@ export class CuriosityDashboardView extends ItemView {
       }
       setting.open.call(setting);
       setting.openTabById.call(setting, this.plugin.manifest.id);
+      return true;
     } catch (error) {
-      this.showActionError('无法打开插件设置', error);
+      if (!silent) this.showActionError('无法打开插件设置', error);
+      return false;
     }
   }
 

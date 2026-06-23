@@ -760,6 +760,27 @@ describe('CuriosityDashboardView', () => {
     expect(harness.openLinkText).not.toHaveBeenCalled();
   });
 
+  it('reports one accurate fallback when missing-template settings cannot be opened', async () => {
+    const harness = makeHarness(async () => model);
+    modalMock.createAsk.mockResolvedValueOnce({
+      issue: 1,
+      targetPath: '10-选题池/1-新选题.md',
+      templatePath: 'missing.md',
+      title: '新选题',
+    });
+    harness.templateCreate.mockRejectedValueOnce(new TemplateNotFoundError('missing.md'));
+    harness.setting.open = undefined as never;
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+
+    await vi.waitFor(() => expect(obsidianMock.notices).toEqual([
+      '创建失败：模板缺失且无法自动打开，请手动打开设置：missing.md。',
+    ]));
+    expect(harness.setting.openTabById).not.toHaveBeenCalled();
+    expect(harness.openLinkText).not.toHaveBeenCalled();
+  });
+
   it('defensively rejects creation when the last rendered model is mobile read-only', async () => {
     const mobileModel = { ...model, mobileReadOnly: true };
     const harness = makeHarness(async () => mobileModel);
