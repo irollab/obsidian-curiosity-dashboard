@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DashboardModel, TopicRecord } from '@/domain/models';
 import { DashboardRenderer, type DashboardHandlers } from '@/ui/dashboard-renderer';
 
-import { FakeElement, findAll, findByText } from '../support/fake-dom';
+import { FakeElement, fakeDocument, findAll, findByText } from '../support/fake-dom';
 
 const topic: TopicRecord = {
   path: '10-选题池/39-首页.md',
@@ -110,7 +110,23 @@ describe('DashboardRenderer', () => {
     expect(tasks?.getAttr('tabindex')).toBe('0');
     const event = tasks?.keydown('ArrowRight');
     expect(event?.defaultPrevented).toBe(true);
+    expect(fakeDocument.activeElement?.text).toBe('Data');
     expect(actions.selectTab).toHaveBeenCalledWith('data');
+  });
+
+  it('creates a real panel target for every tab and hides inactive panels', () => {
+    const { root } = render(model(), 'tasks');
+    const panels = findAll(root, (element) => element.getAttr('role') === 'tabpanel');
+
+    expect(panels).toHaveLength(3);
+    expect(panels.map((panel) => panel.getAttr('id'))).toEqual([
+      'curiosity-panel-overview',
+      'curiosity-panel-tasks',
+      'curiosity-panel-data',
+    ]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(findByText(panels[1]!, 'Mission Control')).toBeDefined();
+    expect(findByText(panels[0]!, 'Mission Control')).toBeUndefined();
   });
 
   it('passes the full task snapshot and explicit paths to handlers', () => {
@@ -137,6 +153,30 @@ describe('DashboardRenderer', () => {
     );
   });
 
+  it('guards pending writes against double click and restores a connected button after failure', async () => {
+    let reject!: (error: Error) => void;
+    const pending = new Promise<void>((_resolve, rejectPromise) => {
+      reject = rejectPromise;
+    });
+    const task = { checked: false, line: 12, text: '完成首页开发验证' };
+    const value = model({ tasks: [task] });
+    const { root, actions } = render(value);
+    vi.mocked(actions.toggleTask).mockReturnValueOnce(pending);
+    const button = findByText(root, task.text);
+
+    button?.click();
+    button?.click();
+    expect(actions.toggleTask).toHaveBeenCalledTimes(1);
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttr('aria-busy')).toBe('true');
+
+    reject(new Error('stale'));
+    await pending.catch(() => undefined);
+    await Promise.resolve();
+    expect(button?.disabled).toBe(false);
+    expect(button?.getAttr('aria-busy')).toBeNull();
+  });
+
   it.each([
     { label: 'mobile', mobileReadOnly: true, stage: '制作' as const },
     { label: 'terminal', mobileReadOnly: false, stage: '复盘' as const },
@@ -158,9 +198,41 @@ describe('DashboardRenderer', () => {
     if (mobileReadOnly) {
       expect(findByText(root, '完成首页开发验证')?.disabled).toBe(true);
       expect(findByText(root, '20-素材库/39-a')?.disabled).toBe(true);
+      expect(findByText(root, '移动端只读：任务、关联路径和阶段推进不可修改。')).toBeDefined();
+      expect(findByText(root, '完成首页开发验证')?.getAttr('aria-describedby')).toBe(
+        'curiosity-mobile-readonly-help',
+      );
     }
     findByText(root, '推进阶段')?.click();
     expect(actions.confirmAdvance).not.toHaveBeenCalled();
+  });
+
+  it('shows accessible reasons for invalid and terminal advance controls', () => {
+    const invalidTopic = { ...topic, stage: null };
+    const invalid = render(model({ focus: { kind: 'invalid-stage', topic: invalidTopic } }));
+    expect(findByText(
+      invalid.root,
+      '当前阶段无法识别；请修正选题卡中的 stage 后再推进。',
+    )).toBeDefined();
+    expect(findByText(invalid.root, '推进阶段')?.getAttr('aria-describedby')).toBe(
+      'curiosity-invalid-stage-help',
+    );
+
+    const terminal = render(model({
+      focus: { kind: 'ready', topic: { ...topic, stage: '复盘' } },
+    }));
+    expect(findByText(
+      terminal.root,
+      '当前已处于复盘终止阶段，无法继续推进。',
+    )).toBeDefined();
+    expect(findByText(terminal.root, '推进阶段')?.getAttr('aria-describedby')).toBe(
+      'curiosity-terminal-stage-help',
+    );
+  });
+
+  it('includes the topic title in the Mission titlebar', () => {
+    const { root } = render(model());
+    expect(findByText(root, `Issue 39 — ${topic.title}`)).toBeDefined();
   });
 
   it('keeps the data tab structurally valid without inventing metrics', () => {

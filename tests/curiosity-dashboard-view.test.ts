@@ -7,6 +7,8 @@ import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { DEFAULT_SETTINGS } from '@/settings';
 
 const obsidianMock = vi.hoisted(() => {
+  let activeElement: FakeElement | null = null;
+
   class FakeStyle {
     readonly properties = new Map<string, string>();
 
@@ -23,6 +25,9 @@ const obsidianMock = vi.hoisted(() => {
     readonly listeners = new Map<string, Array<(event: { key: string; preventDefault(): void }) => void>>();
     readonly style = new FakeStyle();
     disabled = false;
+    hidden = false;
+    isConnected = true;
+    parent: FakeElement | null = null;
     text = '';
     tag = 'div';
     type = '';
@@ -32,6 +37,7 @@ const obsidianMock = vi.hoisted(() => {
     }
 
     empty(): void {
+      for (const child of this.children) child.disconnect();
       this.children.length = 0;
     }
 
@@ -56,6 +62,8 @@ const obsidianMock = vi.hoisted(() => {
       child.tag = tag;
       child.text = options.text ?? '';
       child.type = options.type ?? '';
+      child.parent = this;
+      child.isConnected = this.isConnected;
       if (options.cls !== undefined) child.addClass(...options.cls.split(/\s+/).filter(Boolean));
       for (const [name, value] of Object.entries(options.attr ?? {})) child.setAttr(name, value);
       this.children.push(child);
@@ -70,6 +78,10 @@ const obsidianMock = vi.hoisted(() => {
       return this.attributes.get(name) ?? null;
     }
 
+    removeAttribute(name: string): void {
+      this.attributes.delete(name);
+    }
+
     addEventListener(
       name: string,
       listener: (event: { key: string; preventDefault(): void }) => void,
@@ -81,8 +93,24 @@ const obsidianMock = vi.hoisted(() => {
 
     click(): void {
       if (this.disabled) return;
+      this.focus();
       const event = { key: '', preventDefault: () => undefined };
       for (const listener of this.listeners.get('click') ?? []) listener(event);
+    }
+
+    keydown(key: string): { key: string; preventDefault(): void } {
+      const event = { key, preventDefault: vi.fn() };
+      for (const listener of this.listeners.get('keydown') ?? []) listener(event);
+      return event;
+    }
+
+    focus(): void {
+      if (this.isConnected) activeElement = this;
+    }
+
+    private disconnect(): void {
+      this.isConnected = false;
+      for (const child of this.children) child.disconnect();
     }
   }
 
@@ -93,7 +121,13 @@ const obsidianMock = vi.hoisted(() => {
     type?: string;
   }
 
-  return { FakeElement, notices: [] as string[], platform: { isMobile: false } };
+  return {
+    FakeElement,
+    getActiveElement: () => activeElement,
+    notices: [] as string[],
+    platform: { isMobile: false },
+    resetFocus: () => { activeElement = null; },
+  };
 });
 
 vi.mock('obsidian', () => ({
@@ -137,7 +171,7 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     setAssociationPath: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
   };
-  const saveSettings = vi.fn(async () => undefined);
+  const saveSettings = vi.fn<() => Promise<void>>(async () => undefined);
   const openLinkText = vi.fn(async () => undefined);
   const setting = { open: vi.fn(), openTabById: vi.fn() };
   const plugin = {
@@ -174,6 +208,7 @@ describe('CuriosityDashboardView', () => {
   beforeEach(() => {
     obsidianMock.platform.isMobile = false;
     obsidianMock.notices.length = 0;
+    obsidianMock.resetFocus();
     vi.unstubAllGlobals();
   });
 
@@ -191,6 +226,7 @@ describe('CuriosityDashboardView', () => {
 
     expect(findByText(view.contentEl, 'Chase your curiosity')).toBeDefined();
     expect(view.contentEl.children[0]?.dataset.activeTab).toBe('tasks');
+    expect(obsidianMock.getActiveElement()).toBeNull();
   });
 
   it('renders a readable failure and retries safely', async () => {
@@ -241,10 +277,84 @@ describe('CuriosityDashboardView', () => {
 
     findByText(view.contentEl, 'Overview')?.click();
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
 
     expect(plugin.settings.defaultTab).toBe('overview');
     expect(view.contentEl.children[0]?.dataset.activeTab).toBe('overview');
+    expect(load).toHaveBeenCalledOnce();
+    expect(obsidianMock.getActiveElement()?.text).toBe('Overview');
+  });
+
+  it('keeps keyboard focus on the newly rendered active tab', async () => {
+    const load = vi.fn(async () => model);
+    const { saveSettings, view } = makeHarness(load);
+    await view.refresh();
+
+    const event = findByText(view.contentEl, 'Tasks')?.keydown('ArrowRight');
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+
+    expect(event?.preventDefault).toHaveBeenCalledOnce();
+    expect(view.contentEl.children[0]?.dataset.activeTab).toBe('data');
+    expect(obsidianMock.getActiveElement()?.text).toBe('Data');
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('does not save or rerender when the active tab is selected again', async () => {
+    const load = vi.fn(async () => model);
+    const { saveSettings, view } = makeHarness(load);
+    await view.refresh();
+    const shell = view.contentEl.children[0];
+
+    findByText(view.contentEl, 'Tasks')?.click();
+    await Promise.resolve();
+
+    expect(saveSettings).not.toHaveBeenCalled();
+    expect(view.contentEl.children[0]).toBe(shell);
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the newer tab when an older save fails and the newer save succeeds', async () => {
+    const first = deferred<void>();
+    const second = deferred<void>();
+    const load = vi.fn(async () => model);
+    const harness = makeHarness(load);
+    harness.saveSettings
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Overview')?.click();
+    findByText(harness.view.contentEl, 'Data')?.click();
+    first.reject(new Error('first failed'));
+    second.resolve();
+    await vi.waitFor(() => expect(harness.saveSettings).toHaveBeenCalledTimes(2));
+    await Promise.allSettled([first.promise, second.promise]);
+    await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('data'));
+
+    expect(harness.plugin.settings.defaultTab).toBe('data');
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('rolls the latest failed tab back to the last successfully persisted tab', async () => {
+    const first = deferred<void>();
+    const second = deferred<void>();
+    const load = vi.fn(async () => model);
+    const harness = makeHarness(load);
+    harness.saveSettings
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Overview')?.click();
+    findByText(harness.view.contentEl, 'Data')?.click();
+    first.resolve();
+    await first.promise;
+    second.reject(new Error('second failed'));
+    await Promise.allSettled([second.promise]);
+    await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
+
+    expect(harness.plugin.settings.defaultTab).toBe('overview');
+    expect(obsidianMock.getActiveElement()?.text).toBe('Overview');
+    expect(load).toHaveBeenCalledOnce();
   });
 
   it('passes a full task snapshot to the mutation and reports mutation errors with Notice', async () => {
@@ -299,4 +409,29 @@ describe('CuriosityDashboardView', () => {
       '制作',
     ));
   });
+
+  it.each(['open', 'openTabById'] as const)(
+    'reports an incomplete Obsidian setting capability when %s is unavailable',
+    async (method) => {
+      const harness = makeHarness(async () => model);
+      (harness.setting as Record<string, unknown>)[method] = undefined;
+      await harness.view.refresh();
+
+      findByText(harness.view.contentEl, '打开插件设置')?.click();
+
+      expect(obsidianMock.notices).toContain(
+        '无法打开插件设置：当前 Obsidian 版本未提供设置入口',
+      );
+    },
+  );
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}

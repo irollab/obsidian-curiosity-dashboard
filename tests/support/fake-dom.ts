@@ -30,6 +30,9 @@ export class FakeElement {
   readonly listeners = new Map<string, FakeListener[]>();
   readonly style = new FakeStyle();
   disabled = false;
+  hidden = false;
+  isConnected = true;
+  parent: FakeElement | null = null;
   text = '';
   tag = 'div';
   type = '';
@@ -39,6 +42,7 @@ export class FakeElement {
   }
 
   empty(): void {
+    for (const child of this.children) child.disconnect();
     this.children.length = 0;
   }
 
@@ -63,6 +67,8 @@ export class FakeElement {
     child.tag = tag;
     child.text = options.text ?? '';
     child.type = options.type ?? '';
+    child.parent = this;
+    child.isConnected = this.isConnected;
     if (options.cls !== undefined) child.addClass(...options.cls.split(/\s+/).filter(Boolean));
     for (const [name, value] of Object.entries(options.attr ?? {})) child.setAttr(name, value);
     this.children.push(child);
@@ -77,6 +83,10 @@ export class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
   addEventListener(name: string, listener: FakeListener): void {
     const listeners = this.listeners.get(name) ?? [];
     listeners.push(listener);
@@ -84,11 +94,23 @@ export class FakeElement {
   }
 
   click(): void {
-    if (!this.disabled) this.dispatch('click');
+    if (!this.disabled) {
+      this.focus();
+      this.dispatch('click');
+    }
   }
 
   keydown(key: string): FakeEvent {
     return this.dispatch('keydown', key);
+  }
+
+  focus(): void {
+    if (this.isConnected) fakeDocument.activeElement = this;
+  }
+
+  private disconnect(): void {
+    this.isConnected = false;
+    for (const child of this.children) child.disconnect();
   }
 
   private dispatch(name: string, key = ''): FakeEvent {
@@ -97,6 +119,8 @@ export class FakeElement {
     return event;
   }
 }
+
+export const fakeDocument: { activeElement: FakeElement | null } = { activeElement: null };
 
 interface FakeElementOptions {
   attr?: Record<string, string>;

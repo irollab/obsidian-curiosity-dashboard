@@ -28,7 +28,7 @@ export class DashboardRenderer {
     model: DashboardModel,
     handlers: DashboardHandlers,
     activeTab: DashboardTab,
-  ): void {
+  ): HTMLButtonElement {
     container.empty();
     container.addClass('curiosity-dashboard');
 
@@ -65,20 +65,31 @@ export class DashboardRenderer {
         if (targetIndex === null) return;
         event.preventDefault();
         const target = buttons[targetIndex];
-        if (target !== undefined) void handlers.selectTab(target.id);
+        if (target !== undefined) {
+          target.button.focus();
+          void handlers.selectTab(target.id);
+        }
       });
     }
 
-    const panel = content.createDiv({
-      cls: `curiosity-tab-panel curiosity-tab-panel--${activeTab}`,
-      attr: {
-        'aria-labelledby': `curiosity-tab-${activeTab}`,
-        id: `curiosity-panel-${activeTab}`,
-        role: 'tabpanel',
-        tabindex: '0',
-      },
-    });
-    if (activeTab !== 'data') renderMissionControl(panel, model, handlers);
+    for (const { id } of TABS) {
+      const active = id === activeTab;
+      const panel = content.createDiv({
+        cls: `curiosity-tab-panel curiosity-tab-panel--${id}`,
+        attr: {
+          'aria-labelledby': `curiosity-tab-${id}`,
+          id: `curiosity-panel-${id}`,
+          role: 'tabpanel',
+          tabindex: active ? '0' : '-1',
+        },
+      });
+      panel.hidden = !active;
+      if (active && id !== 'data') renderMissionControl(panel, model, handlers);
+    }
+
+    const activeButton = buttons.find(({ id }) => id === activeTab)?.button;
+    if (activeButton === undefined) throw new Error(`Unknown dashboard tab: ${activeTab}`);
+    return activeButton;
   }
 }
 

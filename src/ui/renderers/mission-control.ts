@@ -18,10 +18,11 @@ export function renderMissionControl(
   });
   renderTitlebar(windowEl, topic);
   renderStages(windowEl, currentStage);
+  const helpIds = renderWriteHelp(windowEl, model.mobileReadOnly, currentStage);
 
   const grid = windowEl.createDiv({ cls: 'curiosity-mission-grid' });
-  renderTasks(grid, model, topic, handlers);
-  renderQuickLook(grid, model, topic, handlers);
+  renderTasks(grid, model, topic, handlers, helpIds.mobile);
+  renderQuickLook(grid, model, topic, handlers, helpIds.mobile);
 
   const advance = windowEl.createEl('button', {
     cls: 'curiosity-primary curiosity-write-action',
@@ -31,11 +32,13 @@ export function renderMissionControl(
   const disabled =
     model.mobileReadOnly || currentStage === null || currentStage === '复盘';
   advance.disabled = disabled;
+  const advanceHelp = [helpIds.mobile, helpIds.stage].filter((id): id is string => id !== null);
+  if (advanceHelp.length > 0) advance.setAttr('aria-describedby', advanceHelp.join(' '));
   if (model.mobileReadOnly) advance.setAttr('title', '移动端为只读模式');
   else if (currentStage === null) advance.setAttr('title', '当前阶段无效，无法推进');
   else if (currentStage === '复盘') advance.setAttr('title', '复盘是终止阶段');
   else {
-    advance.addEventListener('click', () => void handlers.confirmAdvance(topic.path, currentStage));
+    bindGuardedAction(advance, () => handlers.confirmAdvance(topic.path, currentStage));
   }
 }
 
@@ -53,7 +56,44 @@ function renderTitlebar(parent: HTMLElement, topic: TopicRecord): void {
     text: 'Mission Control',
     attr: { id: 'curiosity-mission-title' },
   });
-  bar.createSpan({ cls: 'curiosity-window-issue', text: `Issue ${topic.issue}` });
+  bar.createSpan({
+    cls: 'curiosity-window-issue',
+    text: `Issue ${topic.issue} — ${topic.title}`,
+  });
+}
+
+function renderWriteHelp(
+  parent: HTMLElement,
+  mobileReadOnly: boolean,
+  currentStage: Stage | null,
+): { mobile: string | null; stage: string | null } {
+  const mobile = mobileReadOnly ? 'curiosity-mobile-readonly-help' : null;
+  const stage = currentStage === null
+    ? 'curiosity-invalid-stage-help'
+    : currentStage === '复盘'
+      ? 'curiosity-terminal-stage-help'
+      : null;
+  if (mobile === null && stage === null) return { mobile, stage };
+
+  const statuses = parent.createDiv({ cls: 'curiosity-write-statuses' });
+  if (mobile !== null) {
+    statuses.createEl('p', {
+      text: '移动端只读：任务、关联路径和阶段推进不可修改。',
+      attr: { id: mobile, role: 'status' },
+    });
+  }
+  if (currentStage === null) {
+    statuses.createEl('p', {
+      text: '当前阶段无法识别；请修正选题卡中的 stage 后再推进。',
+      attr: { id: 'curiosity-invalid-stage-help', role: 'status' },
+    });
+  } else if (currentStage === '复盘') {
+    statuses.createEl('p', {
+      text: '当前已处于复盘终止阶段，无法继续推进。',
+      attr: { id: 'curiosity-terminal-stage-help', role: 'status' },
+    });
+  }
+  return { mobile, stage };
 }
 
 function renderStages(parent: HTMLElement, current: Stage | null): void {
@@ -89,6 +129,7 @@ function renderTasks(
   model: DashboardModel,
   topic: TopicRecord,
   handlers: DashboardHandlers,
+  mobileHelpId: string | null,
 ): void {
   const card = parent.createEl('section', {
     cls: 'curiosity-subcard curiosity-tasks',
@@ -110,8 +151,10 @@ function renderTasks(
       attr: { 'aria-pressed': String(task.checked) },
     });
     button.disabled = model.mobileReadOnly;
-    if (model.mobileReadOnly) button.setAttr('title', '移动端为只读模式');
-    else button.addEventListener('click', () => void handlers.toggleTask(topic.path, task));
+    if (model.mobileReadOnly) {
+      button.setAttr('title', '移动端为只读模式');
+      if (mobileHelpId !== null) button.setAttr('aria-describedby', mobileHelpId);
+    } else bindGuardedAction(button, () => handlers.toggleTask(topic.path, task));
   }
 }
 
@@ -120,6 +163,7 @@ function renderQuickLook(
   model: DashboardModel,
   topic: TopicRecord,
   handlers: DashboardHandlers,
+  mobileHelpId: string | null,
 ): void {
   const card = parent.createEl('section', {
     cls: 'curiosity-subcard curiosity-quick-look',
@@ -163,11 +207,27 @@ function renderQuickLook(
         type: 'button',
       });
       button.disabled = model.mobileReadOnly;
-      if (model.mobileReadOnly) button.setAttr('title', '移动端为只读模式');
-      else {
-        button.addEventListener('click', () =>
-          void handlers.setAssociation(topic.path, field, candidate));
+      if (model.mobileReadOnly) {
+        button.setAttr('title', '移动端为只读模式');
+        if (mobileHelpId !== null) button.setAttr('aria-describedby', mobileHelpId);
+      } else {
+        bindGuardedAction(button, () =>
+          handlers.setAssociation(topic.path, field, candidate));
       }
     }
   }
+}
+
+function bindGuardedAction(button: HTMLButtonElement, action: () => Promise<void>): void {
+  button.addEventListener('click', () => {
+    if (button.disabled) return;
+    button.disabled = true;
+    button.setAttr('aria-busy', 'true');
+    const settle = (): void => {
+      if (!button.isConnected) return;
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    };
+    void action().then(settle, settle);
+  });
 }

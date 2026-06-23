@@ -13,6 +13,10 @@ type DashboardTab = DashboardSettings['defaultTab'];
 
 export class CuriosityDashboardView extends ItemView {
   private activeTab: DashboardTab;
+  private persistedTab: DashboardTab;
+  private persistedTabRevision = 0;
+  private tabRevision = 0;
+  private lastModel: DashboardModel | null = null;
   private readonly refreshController: LatestRefresh<DashboardModel>;
   private readonly renderer = new DashboardRenderer();
 
@@ -22,6 +26,7 @@ export class CuriosityDashboardView extends ItemView {
   ) {
     super(leaf);
     this.activeTab = plugin.settings.defaultTab;
+    this.persistedTab = plugin.settings.defaultTab;
     this.refreshController = new LatestRefresh<DashboardModel>({
       loading: () => this.renderLoading(),
       success: (model) => this.renderModel(model),
@@ -47,6 +52,7 @@ export class CuriosityDashboardView extends ItemView {
 
   override async onClose(): Promise<void> {
     this.refreshController.dispose();
+    this.lastModel = null;
     this.contentEl.empty();
   }
 
@@ -81,9 +87,10 @@ export class CuriosityDashboardView extends ItemView {
     status.createEl('p', { text: '正在读取本地 Markdown 数据…' });
   }
 
-  private renderModel(model: DashboardModel): void {
+  private renderModel(model: DashboardModel, focusActiveTab = false): void {
     this.prepareContent('curiosity-dashboard--ready');
-    this.renderer.render(this.contentEl, model, {
+    this.lastModel = model;
+    const activeButton = this.renderer.render(this.contentEl, model, {
       openPath: (path) => this.openPath(path),
       toggleTask: (path, task) => this.toggleTask(path, task),
       confirmAdvance: (path, stage) => this.confirmAdvance(path, stage),
@@ -92,6 +99,7 @@ export class CuriosityDashboardView extends ItemView {
       setAssociation: (topicPath, field, value) =>
         this.setAssociation(topicPath, field, value),
     }, this.activeTab);
+    if (focusActiveTab) activeButton.focus();
   }
 
   private async openPath(path: string): Promise<void> {
@@ -124,27 +132,40 @@ export class CuriosityDashboardView extends ItemView {
   private openSettings(): void {
     try {
       const setting = (this.app as typeof this.app & {
-        setting?: { open(): void; openTabById(id: string): void };
+        setting?: { open?: unknown; openTabById?: unknown };
       }).setting;
-      if (setting === undefined) throw new Error('当前 Obsidian 版本未提供设置入口');
-      setting.open();
-      setting.openTabById(this.plugin.manifest.id);
+      if (
+        setting === undefined ||
+        typeof setting.open !== 'function' ||
+        typeof setting.openTabById !== 'function'
+      ) {
+        throw new Error('当前 Obsidian 版本未提供设置入口');
+      }
+      setting.open.call(setting);
+      setting.openTabById.call(setting, this.plugin.manifest.id);
     } catch (error) {
       this.showActionError('无法打开插件设置', error);
     }
   }
 
   private async selectTab(tab: DashboardTab): Promise<void> {
-    const previousTab = this.activeTab;
-    const previousDefault = this.plugin.settings.defaultTab;
+    if (tab === this.activeTab) return;
+    const revision = ++this.tabRevision;
     this.activeTab = tab;
     this.plugin.settings.defaultTab = tab;
+    if (this.lastModel !== null) this.renderModel(this.lastModel, true);
     try {
       await this.plugin.saveSettings();
-      await this.refresh();
+      if (revision > this.persistedTabRevision) {
+        this.persistedTabRevision = revision;
+        this.persistedTab = tab;
+      }
     } catch (error) {
-      this.activeTab = previousTab;
-      this.plugin.settings.defaultTab = previousDefault;
+      if (revision === this.tabRevision) {
+        this.activeTab = this.persistedTab;
+        this.plugin.settings.defaultTab = this.persistedTab;
+        if (this.lastModel !== null) this.renderModel(this.lastModel, true);
+      }
       this.showActionError('无法保存当前标签', error);
     }
   }
