@@ -20,6 +20,46 @@ async function stylesheet(): Promise<string> {
   return (await readFile(new URL('../styles.css', import.meta.url), 'utf8')).toLowerCase();
 }
 
+function blockAfter(css: string, marker: string): string {
+  const markerIndex = css.indexOf(marker);
+  if (markerIndex < 0) throw new Error(`Missing CSS marker: ${marker}`);
+  const markerOpen = marker.indexOf('{');
+  const open = markerOpen >= 0
+    ? markerIndex + markerOpen
+    : css.indexOf('{', markerIndex + marker.length);
+  if (open < 0) throw new Error(`Missing CSS block: ${marker}`);
+  let depth = 0;
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1;
+    if (css[index] === '}') depth -= 1;
+    if (depth === 0) return css.slice(open + 1, index);
+  }
+  throw new Error(`Unclosed CSS block: ${marker}`);
+}
+
+function hexLuminance(hex: string): number {
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
+  const linear = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+function contrastRatio(first: string, second: string): number {
+  const firstLuminance = hexLuminance(first);
+  const secondLuminance = hexLuminance(second);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
+function solidColors(block: string): { background: string; foreground: string } {
+  const background = block.match(/background:\s*(#[0-9a-f]{6})\s*;/)?.[1];
+  const foreground = block.match(/(?:^|\n)\s*color:\s*(#[0-9a-f]{6})\s*;/)?.[1];
+  if (background === undefined || foreground === undefined) {
+    throw new Error(`Expected solid background and foreground colors in: ${block}`);
+  }
+  return { background, foreground };
+}
+
 describe('dashboard stylesheet contract', () => {
   it('defines the approved exact palette on the dashboard root', async () => {
     const css = await stylesheet();
@@ -55,8 +95,13 @@ describe('dashboard stylesheet contract', () => {
 
   it('contains responsive, focus, hidden-panel, accessibility, and fallback contracts', async () => {
     const css = await stylesheet();
-    expect(css).toContain('@media (max-width: 1279px)');
-    expect(css).toContain('@media (max-width: 700px)');
+    expect(blockAfter(css, '.curiosity-dashboard')).toContain('container-type: inline-size');
+    expect(css).toContain('@container curiosity-dashboard (max-width: 1279px)');
+    expect(css).toContain('@container curiosity-dashboard (max-width: 900px)');
+    expect(css).toContain('@container curiosity-dashboard (max-width: 700px)');
+    expect(css).not.toContain('@media (max-width: 1279px)');
+    expect(css).not.toContain('@media (max-width: 900px)');
+    expect(blockAfter(css, '@media (max-width: 700px)')).not.toContain('.curiosity-dashboard');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('@media (forced-colors: active)');
     expect(css).toContain('@media (prefers-contrast: more)');
@@ -71,5 +116,39 @@ describe('dashboard stylesheet contract', () => {
     expect(css).toMatch(/\.curiosity-dashboard \.curiosity-write-action:disabled/);
     expect(css).toMatch(/\.curiosity-dashboard \.curiosity-table-wrapper[^}]*overflow-x:\s*auto/s);
     expect(css).toMatch(/\.curiosity-dashboard \.curiosity-dock[^}]*overflow-x:\s*auto/s);
+  });
+
+  it('contains the dock inside the dashboard leaf and stacks the queue below 1280px', async () => {
+    const css = await stylesheet();
+    const dock = blockAfter(css, '.curiosity-dashboard .curiosity-dock');
+    expect(dock).toContain('position: sticky');
+    expect(dock).toContain('max-width: 100%');
+    expect(dock).not.toMatch(/position:\s*fixed|left:\s*50%|100vw|transform:\s*translate/);
+    expect(css).not.toContain('100vw');
+
+    const desktopNarrow = blockAfter(css, '@container curiosity-dashboard (max-width: 1279px)');
+    expect(blockAfter(desktopNarrow, '.curiosity-dashboard .curiosity-queue-grid'))
+      .toContain('grid-template-columns: minmax(0, 1fr)');
+  });
+
+  it('keeps saturated primary and current-stage controls above 4.5:1 contrast', async () => {
+    const css = await stylesheet();
+    for (const selector of [
+      '.curiosity-dashboard .curiosity-primary',
+      '.curiosity-dashboard .curiosity-primary:hover:not(:disabled)',
+      '.curiosity-dashboard .curiosity-stage-track li.is-current',
+    ]) {
+      const { background, foreground } = solidColors(blockAfter(css, selector));
+      expect(contrastRatio(background, foreground), selector).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('allows plugin modals to scroll vertically without leaking horizontally', async () => {
+    const css = await stylesheet();
+    const modal = blockAfter(css, '\n.curiosity-modal {');
+    expect(modal).toContain('overflow-x: hidden');
+    expect(modal).toContain('overflow-y: auto');
+    expect(modal).toContain('max-height: min(86vh, 720px)');
+    expect(modal).toContain('overscroll-behavior: contain');
   });
 });
