@@ -5,3 +5,4 @@ main.js
 *.zip
 coverage/
 .DS_Store
+.visual-qa/
