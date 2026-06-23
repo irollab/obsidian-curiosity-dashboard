@@ -15,11 +15,30 @@ export class DashboardDataService {
   ) {}
 
   async load(mobileReadOnly: boolean): Promise<DashboardModel> {
+    const settings = { ...this.settings };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const before = selectionFingerprint(this.vault, settings);
+      try {
+        const model = await this.loadOnce(mobileReadOnly, settings);
+        const after = selectionFingerprint(this.vault, settings);
+        if (before === after) return model;
+      } catch (error) {
+        const after = selectionFingerprint(this.vault, settings);
+        if (before === after) throw error;
+      }
+    }
+    throw new DashboardSnapshotChangedError();
+  }
+
+  private async loadOnce(
+    mobileReadOnly: boolean,
+    settings: DashboardSettings,
+  ): Promise<DashboardModel> {
     // These services intentionally live for one load. Repository snapshots are shared by all
     // projections in this model, while a later refresh observes the latest Vault state.
-    const topics = new TopicRepository(this.vault, this.settings.topicDir);
-    const resolver = new AssociationResolver(this.vault, this.settings);
-    const reviewService = new ReviewMetricsService(this.vault, this.settings.reviewDir);
+    const topics = new TopicRepository(this.vault, settings.topicDir);
+    const resolver = new AssociationResolver(this.vault, settings);
+    const reviewService = new ReviewMetricsService(this.vault, settings.reviewDir);
 
     const focus = resolveAssociations(resolveFocus(topics.all()), resolver);
     const focusTopic = topicFromFocus(focus);
@@ -29,15 +48,15 @@ export class DashboardDataService {
         : {
             scriptPath:
               focusTopic.scriptPath === null
-                ? resolver.candidates(this.settings.scriptDir, focusTopic.issue)
+                ? resolver.candidates(settings.scriptDir, focusTopic.issue)
                 : [],
             assetPath:
               focusTopic.assetPath === null
-                ? resolver.candidates(this.settings.assetDir, focusTopic.issue, true)
+                ? resolver.candidates(settings.assetDir, focusTopic.issue, true)
                 : [],
             reviewPath:
               focusTopic.reviewPath === null
-                ? resolver.candidates(this.settings.reviewDir, focusTopic.issue)
+                ? resolver.candidates(settings.reviewDir, focusTopic.issue)
                 : [],
           };
     const tasks =
@@ -46,9 +65,7 @@ export class DashboardDataService {
         : parseChecklistSection(await this.vault.read(focusTopic.path));
     const review = await reviewService.load(focusTopic?.reviewPath ?? null);
     const backgroundUrl =
-      this.settings.backgroundPath.length === 0
-        ? null
-        : this.vault.resourceUrl(this.settings.backgroundPath);
+      settings.backgroundPath.length === 0 ? null : this.vault.resourceUrl(settings.backgroundPath);
 
     return {
       focus,
@@ -63,6 +80,139 @@ export class DashboardDataService {
       associationCandidates,
     };
   }
+}
+
+class DashboardSnapshotChangedError extends Error {
+  constructor() {
+    super('Dashboard snapshot changed repeatedly during load; refresh and try again');
+    this.name = 'DashboardSnapshotChangedError';
+  }
+}
+
+const TOPIC_FINGERPRINT_FIELDS = [
+  'type',
+  'title',
+  'status',
+  'stage',
+  'priority',
+  'due_date',
+  'next_action',
+  'homepage_focus',
+  'issue',
+  'script_path',
+  'asset_path',
+  'review_path',
+] as const;
+const REVIEW_FINGERPRINT_FIELDS = ['type', 'created', 'publish_date'] as const;
+const EXPLICIT_PATH_FIELDS = ['script_path', 'asset_path', 'review_path'] as const;
+
+function selectionFingerprint(vault: VaultGateway, settings: DashboardSettings): string {
+  const markdownPaths = normalizedSet(vault.listMarkdownPaths());
+  const filePaths = normalizedSet(vault.listPaths());
+  const folderPaths = normalizedSet(vault.listFolders());
+  const topicPaths = [...markdownPaths].filter((path) => isInside(path, settings.topicDir)).sort();
+  const reviewDirectoryPaths = [...markdownPaths]
+    .filter((path) => isInside(path, settings.reviewDir))
+    .sort();
+  const topicSnapshots = topicPaths.map(
+    (path): [string, Record<string, unknown> | null] => [path, safeFrontmatter(vault, path)],
+  );
+  const topicEntries: Array<[string, Record<string, unknown> | null]> = [];
+  const explicitPaths = new Set<string>();
+
+  for (const [path, frontmatter] of topicSnapshots) {
+    topicEntries.push([path, pickFields(frontmatter, TOPIC_FINGERPRINT_FIELDS)]);
+    for (const field of EXPLICIT_PATH_FIELDS) {
+      const explicit = frontmatter?.[field];
+      if (typeof explicit === 'string' && explicit.trim().length > 0) {
+        explicitPaths.add(normalizePath(explicit));
+      }
+    }
+  }
+
+  const explicitReviewPaths = topicSnapshots
+    .map(([, frontmatter]) => frontmatter?.review_path)
+    .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+    .map(normalizePath);
+  const reviewPaths = [...new Set([...reviewDirectoryPaths, ...explicitReviewPaths])].sort();
+  const reviewEntries = reviewPaths.map((path) => [
+    path,
+    markdownPaths.has(path)
+      ? pickFields(safeFrontmatter(vault, path), REVIEW_FINGERPRINT_FIELDS)
+      : null,
+  ]);
+  const explicitStatuses = [...explicitPaths]
+    .sort()
+    .map((path) => [
+      path,
+      {
+        file: filePaths.has(path),
+        folder: folderPaths.has(path),
+        markdown: markdownPaths.has(path),
+      },
+    ]);
+
+  return stableSerialize({
+    topicEntries,
+    reviewEntries,
+    explicitStatuses,
+    scriptCandidates: [...markdownPaths]
+      .filter((path) => isInside(path, settings.scriptDir))
+      .sort(),
+    assetCandidates: [...filePaths, ...folderPaths]
+      .filter((path) => isInside(path, settings.assetDir))
+      .sort(),
+    reviewCandidates: reviewDirectoryPaths,
+    background: {
+      path: settings.backgroundPath,
+      file: filePaths.has(normalizePath(settings.backgroundPath)),
+    },
+  });
+}
+
+function normalizedSet(paths: string[]): Set<string> {
+  return new Set(paths.map(normalizePath));
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+function isInside(path: string, directory: string): boolean {
+  const normalizedDirectory = normalizePath(directory);
+  return normalizedDirectory.length === 0 || path.startsWith(`${normalizedDirectory}/`);
+}
+
+function safeFrontmatter(vault: VaultGateway, path: string): Record<string, unknown> | null {
+  try {
+    return vault.getFrontmatter(path);
+  } catch {
+    return null;
+  }
+}
+
+function pickFields(
+  frontmatter: Record<string, unknown> | null,
+  fields: readonly string[],
+): Record<string, unknown> | null {
+  if (frontmatter === null) return null;
+  return Object.fromEntries(fields.map((field) => [field, frontmatter[field] ?? null]));
+}
+
+function stableSerialize(value: unknown): string {
+  return JSON.stringify(canonicalValue(value));
+}
+
+function canonicalValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, canonicalValue(item)]),
+    );
+  }
+  return value;
 }
 
 function resolveAssociations(focus: FocusState, resolver: AssociationResolver): FocusState {

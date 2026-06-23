@@ -171,6 +171,189 @@ describe('DashboardDataService', () => {
     expect(first.queue).toEqual([]);
     expect(second.queue.map((topic) => topic.issue)).toEqual([40]);
   });
+
+  it('retries when the selected focus is renamed before it can be read', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Old.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    vault.onRead = (path) => {
+      if (path !== '10-选题池/39-Old.md') return;
+      vault.files.delete(path);
+      vault.metadata.delete(path);
+      addTopic(vault, '10-选题池/40-New.md', '# New\n' + CHECKLIST, {
+        issue: 40,
+        stage: '发布',
+        homepage_focus: true,
+      });
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('ready');
+    if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+    expect(model.focus.topic.path).toBe('10-选题池/40-New.md');
+    expect(model.focus.topic.issue).toBe(40);
+    expect(model.tasks).toHaveLength(2);
+    expect(vault.readPaths.filter((path) => path.includes('Old.md'))).toHaveLength(1);
+  });
+
+  it('retries when a selected review disappears and safely falls back to the remaining review', async () => {
+    const vault = new HookVaultGateway();
+    addReview(vault, '60-发布复盘/new.md', '200', '2026-06-22');
+    addReview(vault, '60-发布复盘/old.md', '100', '2026-06-20');
+    vault.onRead = (path) => {
+      if (path !== '60-发布复盘/new.md') return;
+      vault.files.delete(path);
+      vault.metadata.delete(path);
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.reviewPath).toBe('60-发布复盘/old.md');
+    expect(model.metrics[0]?.views).toBe('100');
+  });
+
+  it('detects deletion of an explicit review outside the configured review directory', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+      review_path: 'archive/explicit.md',
+    });
+    addReview(vault, 'archive/explicit.md', '200', '2026-06-23');
+    addReview(vault, '60-发布复盘/fallback.md', '100', '2026-06-20');
+    const deleteExplicitReview = (path: string): void => {
+      if (path !== 'archive/explicit.md') {
+        vault.onRead = deleteExplicitReview;
+        return;
+      }
+      vault.files.delete(path);
+      vault.metadata.delete(path);
+    };
+    vault.onRead = deleteExplicitReview;
+
+    const model = await service(vault).load(false);
+
+    expect(model.reviewPath).toBe('60-发布复盘/fallback.md');
+    expect(model.metrics[0]?.views).toBe('100');
+  });
+
+  it('uses one settings snapshot even when the original object changes during an awaited read', async () => {
+    const vault = new HookVaultGateway();
+    const settings = { ...SETTINGS, backgroundPath: '80-制作资产/original.png' };
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    addReview(vault, '60-发布复盘/original.md', '100', '2026-06-22');
+    addReview(vault, 'other-reviews/changed.md', '999', '2026-06-23');
+    vault.files.set('80-制作资产/original.png', 'original');
+    vault.files.set('changed.png', 'changed');
+    vault.onRead = (path) => {
+      if (path !== '10-选题池/39-Focus.md') return;
+      settings.topicDir = 'other-topics';
+      settings.scriptDir = 'other-scripts';
+      settings.assetDir = 'other-assets';
+      settings.reviewDir = 'other-reviews';
+      settings.backgroundPath = 'changed.png';
+    };
+
+    const model = await new DashboardDataService(vault, settings).load(false);
+
+    expect(model.focus.kind).toBe('ready');
+    expect(model.reviewPath).toBe('60-发布复盘/original.md');
+    expect(model.metrics[0]?.views).toBe('100');
+    expect(model.backgroundUrl).toContain('original.png');
+  });
+
+  it('retries when focus-selection metadata changes during a read', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    addTopic(vault, '10-选题池/40-Other.md', '# Other', {
+      issue: 40,
+      stage: '策划',
+      homepage_focus: false,
+    });
+    vault.onRead = (path) => {
+      if (path !== '10-选题池/39-Focus.md') return;
+      const metadata = vault.metadata.get('10-选题池/40-Other.md');
+      if (metadata !== undefined) metadata.homepage_focus = true;
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('multiple');
+    expect(model.tasks).toEqual([]);
+  });
+
+  it('does not retry or rescan without bound for one stable load', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+      script_path: '40-脚本大纲/39.md',
+      asset_path: '20-素材库/39',
+      review_path: '60-发布复盘/39.md',
+    });
+    vault.files.set('40-脚本大纲/39.md', '# Script');
+    vault.directories.add('20-素材库/39');
+    addReview(vault, '60-发布复盘/39.md', '100', '2026-06-22');
+
+    await service(vault).load(false);
+
+    expect(vault.readPaths).toEqual([
+      '10-选题池/39-Focus.md',
+      '60-发布复盘/39.md',
+    ]);
+    expect(vault.markdownScans).toBe(4);
+    expect(vault.fileScans).toBe(6);
+    expect(vault.folderScans).toBe(2);
+  });
+
+  it('does not hide a stable non-transient read error', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    vault.readError = new Error('permission denied');
+
+    await expect(service(vault).load(false)).rejects.toThrow('permission denied');
+    expect(vault.readPaths).toHaveLength(1);
+  });
+
+  it('fails clearly after two consecutively inconsistent snapshots', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', '# Focus', {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    addReview(vault, '60-发布复盘/review.md', '100', '2026-06-22');
+    const mutateEveryRead = (path: string): void => {
+      vault.onRead = mutateEveryRead;
+      if (path !== '60-发布复盘/review.md') return;
+      const metadata = vault.metadata.get('10-选题池/39-Focus.md');
+      if (metadata !== undefined) metadata.stage = metadata.stage === '制作' ? '发布' : '制作';
+    };
+    vault.onRead = mutateEveryRead;
+
+    await expect(service(vault).load(false)).rejects.toThrow(
+      'Dashboard snapshot changed repeatedly during load',
+    );
+    expect(vault.readPaths.filter((path) => path.endsWith('review.md'))).toHaveLength(2);
+  });
 });
 
 function service(vault: FakeVaultGateway, backgroundPath = ''): DashboardDataService {
@@ -195,4 +378,38 @@ function addReview(
 ): void {
   vault.files.set(path, `| 平台 | 播放/观看 |\n| --- | ---: |\n| B站 | ${views} |`);
   vault.metadata.set(path, { type: '发布复盘', created });
+}
+
+class HookVaultGateway extends FakeVaultGateway {
+  onRead: ((path: string) => void) | null = null;
+  readError: Error | null = null;
+  readonly readPaths: string[] = [];
+  markdownScans = 0;
+  fileScans = 0;
+  folderScans = 0;
+
+  override listPaths(): string[] {
+    this.fileScans += 1;
+    return super.listPaths();
+  }
+
+  override listMarkdownPaths(): string[] {
+    this.markdownScans += 1;
+    return super.listMarkdownPaths();
+  }
+
+  override listFolders(): string[] {
+    this.folderScans += 1;
+    return super.listFolders();
+  }
+
+  override async read(path: string): Promise<string> {
+    const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '');
+    this.readPaths.push(normalized);
+    const hook = this.onRead;
+    this.onRead = null;
+    hook?.(normalized);
+    if (this.readError !== null) throw this.readError;
+    return super.read(normalized);
+  }
 }
