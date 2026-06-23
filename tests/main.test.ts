@@ -68,7 +68,10 @@ vi.mock('obsidian', () => {
 function makeApp() {
   const leaves: unknown[] = [];
   const newLeaf = {
-    detach: vi.fn(),
+    detach: vi.fn(() => {
+      const index = leaves.indexOf(newLeaf);
+      if (index >= 0) leaves.splice(index, 1);
+    }),
     setViewState: vi.fn(async () => {
       leaves.push(newLeaf);
     }),
@@ -187,6 +190,7 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     const second = plugin.activateView();
 
     expect(second).toBe(first);
+    await Promise.resolve();
     expect(workspace.getLeaf).toHaveBeenCalledTimes(1);
     finish();
     await Promise.all([first, second]);
@@ -216,11 +220,35 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     await plugin.onload();
 
     const activation = plugin.activateView();
+    await Promise.resolve();
     obsidianMock.events
       .find(({ source }) => source === 'workspace')
       ?.callback({ view: activeView });
     finish();
     await activation;
+    await vi.runAllTimersAsync();
+
+    expect(activeView.refresh).not.toHaveBeenCalled();
+  });
+
+  it('publishes the activation single-flight before setViewState synchronously changes the active leaf', async () => {
+    vi.useFakeTimers();
+    const { app, leaves, newLeaf, workspace } = makeApp();
+    const activeView = {
+      getViewType: () => DASHBOARD_VIEW_TYPE,
+      refresh: vi.fn(async () => undefined),
+    };
+    workspace.getActiveViewOfType.mockReturnValue(activeView);
+    newLeaf.setViewState.mockImplementationOnce(async () => {
+      obsidianMock.events
+        .find(({ source }) => source === 'workspace')
+        ?.callback({ view: activeView });
+      leaves.push(newLeaf);
+    });
+    const plugin = makePlugin(app);
+    await plugin.onload();
+
+    await plugin.activateView();
     await vi.runAllTimersAsync();
 
     expect(activeView.refresh).not.toHaveBeenCalled();
@@ -238,6 +266,49 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     await expect(plugin.activateView()).resolves.toBeUndefined();
 
     expect(workspace.getLeaf).toHaveBeenCalledTimes(2);
+  });
+
+  it('detaches a newly created leaf when setViewState fails and leaves one clean leaf after retry', async () => {
+    const { app, leaves, newLeaf, workspace } = makeApp();
+    newLeaf.setViewState
+      .mockImplementationOnce(async () => {
+        leaves.push(newLeaf);
+        throw new Error('state failed');
+      })
+      .mockImplementationOnce(async () => {
+        leaves.push(newLeaf);
+      });
+    const plugin = makePlugin(app);
+    await plugin.onload();
+
+    await expect(plugin.activateView()).rejects.toThrow('state failed');
+    expect(newLeaf.detach).toHaveBeenCalledTimes(1);
+    expect(leaves).toEqual([]);
+
+    await expect(plugin.activateView()).resolves.toBeUndefined();
+    expect(workspace.getLeaf).toHaveBeenCalledTimes(2);
+    expect(leaves).toEqual([newLeaf]);
+  });
+
+  it('detaches a new leaf when reveal fails but does not detach an existing leaf', async () => {
+    const created = makeApp();
+    created.workspace.revealLeaf.mockRejectedValueOnce(new Error('reveal failed'));
+    const createdPlugin = makePlugin(created.app);
+    await createdPlugin.onload();
+
+    await expect(createdPlugin.activateView()).rejects.toThrow('reveal failed');
+    expect(created.newLeaf.detach).toHaveBeenCalledTimes(1);
+    expect(created.leaves).toEqual([]);
+
+    const reused = makeApp();
+    const existing = { detach: vi.fn(), view: {} };
+    reused.workspace.getLeavesOfType.mockReturnValue([existing]);
+    reused.workspace.revealLeaf.mockRejectedValueOnce(new Error('reveal failed'));
+    const reusedPlugin = makePlugin(reused.app);
+    await reusedPlugin.onload();
+
+    await expect(reusedPlugin.activateView()).rejects.toThrow('reveal failed');
+    expect(existing.detach).not.toHaveBeenCalled();
   });
 
   it('coalesces delayed startup and manual activation into one leaf creation', async () => {
@@ -262,6 +333,7 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
 
     const manual = plugin.activateView();
     layoutReady();
+    await Promise.resolve();
     finish();
     await manual;
     await vi.waitFor(() => expect(workspace.revealLeaf).toHaveBeenCalledTimes(1));
@@ -442,6 +514,7 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     await plugin.onload();
     const activation = plugin.activateView();
 
+    await Promise.resolve();
     plugin.onunload();
     finish();
     await activation;

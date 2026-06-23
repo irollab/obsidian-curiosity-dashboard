@@ -111,7 +111,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
     if (this.unloaded) return Promise.reject(new Error('Curiosity Dashboard plugin is unloaded'));
     if (this.activationPromise !== null) return this.activationPromise;
 
-    const operation = this.activateViewOnce();
+    const operation = Promise.resolve().then(() => this.activateViewOnce());
     this.activationPromise = operation;
     void operation.then(
       () => this.clearActivation(operation),
@@ -121,20 +121,31 @@ export default class CuriosityDashboardPlugin extends Plugin {
   }
 
   private async activateViewOnce(): Promise<void> {
-    let leaf: WorkspaceLeaf | null =
-      this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)[0] ?? null;
+    let leaf: WorkspaceLeaf | null = null;
     let created = false;
-    if (leaf === null) {
-      leaf = this.app.workspace.getLeaf('tab');
-      created = true;
-      await leaf.setViewState({ type: DASHBOARD_VIEW_TYPE, active: true });
+    try {
+      leaf = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)[0] ?? null;
+      if (leaf === null) {
+        leaf = this.app.workspace.getLeaf('tab');
+        created = true;
+        await leaf.setViewState({ type: DASHBOARD_VIEW_TYPE, active: true });
+      }
+      if (this.unloaded) {
+        if (created) leaf.detach();
+        return;
+      }
+      await this.app.workspace.revealLeaf(leaf);
+      if (!this.unloaded && !created) this.scheduleRefresh();
+    } catch (error) {
+      if (created && leaf !== null) {
+        try {
+          leaf.detach();
+        } catch (detachError) {
+          console.error('Unable to detach failed Curiosity Dashboard leaf', detachError);
+        }
+      }
+      throw error;
     }
-    if (this.unloaded) {
-      if (created) leaf.detach();
-      return;
-    }
-    await this.app.workspace.revealLeaf(leaf);
-    if (!this.unloaded && !created) this.scheduleRefresh();
   }
 
   private clearActivation(operation: Promise<void>): void {
