@@ -15,12 +15,14 @@ interface MarkdownTable {
   headers: string[];
   rows: string[][];
   startLine: number;
+  endLine: number;
 }
 
 export function parseReviewMetrics(markdown: string): MetricRow[] {
-  const lines = markdown.split(/\r?\n/);
+  const lines = visibleMarkdownLines(markdown);
+  const tables = extractTables(lines);
 
-  for (const table of extractTables(lines)) {
+  for (const table of tables) {
     const platformColumn = column(table.headers, aliases.platform);
     const viewsColumn = column(table.headers, aliases.views);
     if (viewsColumn < 0) continue;
@@ -36,7 +38,7 @@ export function parseReviewMetrics(markdown: string): MetricRow[] {
 
     const snapshotTimeColumn = column(table.headers, aliases.snapshotTime);
     if (snapshotTimeColumn < 0) continue;
-    const platform = nearestPlatform(lines, table.startLine);
+    const platform = nearestPlatform(lines, table, tables);
     if (platform === null) continue;
     const latest = [...table.rows]
       .reverse()
@@ -47,6 +49,34 @@ export function parseReviewMetrics(markdown: string): MetricRow[] {
   }
 
   return [];
+}
+
+export function visibleMarkdownLines(markdown: string): string[] {
+  const lines = markdown.split(/\r?\n/);
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+  const commentState = { active: false };
+
+  return lines.map((line) => {
+    if (fence !== null) {
+      if (isClosingFence(line, fence)) fence = null;
+      return '';
+    }
+
+    const withoutComments = stripHtmlComments(line, commentState);
+    if (/^(?: {4}|\t)/.test(withoutComments)) return '';
+
+    const opening = /^(?: {0,3})(`{3,}|~{3,})(.*)$/.exec(withoutComments);
+    const sequence = opening?.[1];
+    const suffix = opening?.[2] ?? '';
+    if (sequence !== undefined && !(sequence.startsWith('`') && suffix.includes('`'))) {
+      fence = {
+        marker: sequence[0] as '`' | '~',
+        length: sequence.length,
+      };
+      return '';
+    }
+    return withoutComments;
+  });
 }
 
 function metric(platform: string, headers: string[], row: string[]): MetricRow {
@@ -85,8 +115,17 @@ function column(headers: string[], names: readonly string[]): number {
   return -1;
 }
 
-function nearestPlatform(lines: string[], tableStartLine: number): string | null {
-  for (let index = tableStartLine - 1; index >= 0; index -= 1) {
+function nearestPlatform(
+  lines: string[],
+  table: MarkdownTable,
+  tables: MarkdownTable[],
+): string | null {
+  const previousTableEnd = tables
+    .filter((candidate) => candidate.endLine < table.startLine)
+    .at(-1)?.endLine ?? -1;
+
+  for (let index = table.startLine - 1; index > previousTableEnd; index -= 1) {
+    if (/^ {0,3}#{1,6}(?:\s|$)/.test(lines[index] ?? '')) return null;
     const match = /^\s*(?:[-+*]\s+)?平台\s*[：:]\s*(\S.*?)\s*$/.exec(lines[index] ?? '');
     const platform = match?.[1]?.trim();
     if (platform !== undefined && platform.length > 0) return platform;
@@ -119,11 +158,50 @@ function extractTables(lines: string[]): MarkdownTable[] {
       rows.push(splitRow(rowLine));
       rowIndex += 1;
     }
-    tables.push({ headers, rows, startLine: index });
+    tables.push({ headers, rows, startLine: index, endLine: Math.max(index + 1, rowIndex - 1) });
     index = rowIndex - 1;
   }
 
   return tables;
+}
+
+function isClosingFence(
+  line: string,
+  fence: { marker: '`' | '~'; length: number },
+): boolean {
+  const sequence = /^ {0,3}([`~]+)\s*$/.exec(line)?.[1];
+  return (
+    sequence !== undefined &&
+    sequence[0] === fence.marker &&
+    [...sequence].every((character) => character === fence.marker) &&
+    sequence.length >= fence.length
+  );
+}
+
+function stripHtmlComments(
+  line: string,
+  state: { active: boolean },
+): string {
+  let result = '';
+  let cursor = 0;
+
+  while (cursor < line.length) {
+    if (state.active) {
+      const end = line.indexOf('-->', cursor);
+      if (end < 0) return result;
+      state.active = false;
+      cursor = end + 3;
+      continue;
+    }
+
+    const start = line.indexOf('<!--', cursor);
+    if (start < 0) return result + line.slice(cursor);
+    result += line.slice(cursor, start);
+    state.active = true;
+    cursor = start + 4;
+  }
+
+  return result;
 }
 
 function splitRow(line: string): string[] {

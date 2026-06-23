@@ -1,5 +1,5 @@
 import type { MetricRow } from '@/domain/models';
-import { parseReviewMetrics } from '@/domain/review-table';
+import { parseReviewMetrics, visibleMarkdownLines } from '@/domain/review-table';
 import type { VaultGateway } from '@/ports/vault-gateway';
 
 export interface ReviewResult {
@@ -15,8 +15,10 @@ export class ReviewMetricsService {
   ) {}
 
   async load(explicitPath: string | null): Promise<ReviewResult> {
-    const explicit = explicitPath === null ? null : this.safeMarkdownPath(explicitPath);
-    const path = explicit ?? this.latestDatedReview();
+    const markdownPaths = this.markdownPaths();
+    const explicit =
+      explicitPath === null ? null : this.safeMarkdownPath(explicitPath, markdownPaths);
+    const path = explicit ?? this.latestDatedReview(markdownPaths);
     if (path === null) return { path: null, metrics: [], commentEvidence: [] };
 
     const markdown = await this.vault.read(path);
@@ -27,18 +29,17 @@ export class ReviewMetricsService {
     };
   }
 
-  private latestDatedReview(): string | null {
-    return this.vault
-      .listMarkdownPaths()
-      .map((path) => this.eligibleLatestPath(path))
+  private latestDatedReview(markdownPaths: Set<string>): string | null {
+    return [...markdownPaths]
+      .map((path) => this.eligibleLatestPath(path, markdownPaths))
       .filter((path): path is string => path !== null)
       .map((path) => ({ path, date: reviewDate(this.vault.getFrontmatter(path)) }))
       .filter((item): item is { path: string; date: number } => item.date !== null)
       .sort((left, right) => right.date - left.date || comparePath(left.path, right.path))[0]?.path ?? null;
   }
 
-  private eligibleLatestPath(path: string): string | null {
-    const normalizedPath = this.safeMarkdownPath(path);
+  private eligibleLatestPath(path: string, markdownPaths: Set<string>): string | null {
+    const normalizedPath = this.safeMarkdownPath(path, markdownPaths);
     const normalizedDirectory = normalizeVaultPath(this.reviewDir);
     if (
       normalizedPath === null ||
@@ -50,16 +51,26 @@ export class ReviewMetricsService {
     return normalizedPath;
   }
 
-  private safeMarkdownPath(path: string): string | null {
+  private safeMarkdownPath(path: string, markdownPaths: Set<string>): string | null {
     const normalizedPath = normalizeVaultPath(path);
     if (
       normalizedPath === null ||
       !normalizedPath.toLowerCase().endsWith('.md') ||
+      !markdownPaths.has(normalizedPath) ||
       !this.vault.exists(normalizedPath)
     ) {
       return null;
     }
     return normalizedPath;
+  }
+
+  private markdownPaths(): Set<string> {
+    return new Set(
+      this.vault
+        .listMarkdownPaths()
+        .map(normalizeVaultPath)
+        .filter((path): path is string => path !== null && path.toLowerCase().endsWith('.md')),
+    );
   }
 }
 
@@ -70,25 +81,50 @@ function reviewDate(frontmatter: Record<string, unknown> | null): number | null 
 function parseDate(value: unknown): number | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}(?:[Tt].+)?$/.test(normalized)) return null;
-  const timestamp = Date.parse(normalized);
-  if (!Number.isFinite(timestamp)) return null;
+  const dateTimePattern =
+    /^(\d{4})-(\d{2})-(\d{2})(?:([ Tt])(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))?)?$/;
+  const match = dateTimePattern.exec(normalized);
+  if (match === null) return null;
 
-  const datePart = /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized);
-  if (datePart !== null) {
-    const year = Number(datePart[1]);
-    const month = Number(datePart[2]);
-    const day = Number(datePart[3]);
-    const date = new Date(Date.UTC(year, month - 1, day));
-    if (
-      date.getUTCFullYear() !== year ||
-      date.getUTCMonth() !== month - 1 ||
-      date.getUTCDate() !== day
-    ) {
-      return null;
-    }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const separator = match[4];
+  const hour = Number(match[5] ?? 0);
+  const minute = Number(match[6] ?? 0);
+  const second = Number(match[7] ?? 0);
+  const fraction = match[8];
+  const isZulu = match[9] !== undefined;
+  const offsetSign = match[10];
+  const offsetHour = Number(match[11] ?? 0);
+  const offsetMinute = Number(match[12] ?? 0);
+  if (
+    !validCalendarDate(year, month, day) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    offsetHour > 14 ||
+    offsetMinute > 59 ||
+    (offsetHour === 14 && offsetMinute !== 0) ||
+    (separator === ' ' && (fraction !== undefined || isZulu || offsetSign !== undefined))
+  ) {
+    return null;
   }
-  return timestamp;
+
+  const millisecond = Number((fraction ?? '').padEnd(3, '0').slice(0, 3));
+  const base = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
+  if (isZulu || offsetSign === undefined) return base;
+  const offset = (offsetHour * 60 + offsetMinute) * 60_000;
+  return offsetSign === '+' ? base - offset : base + offset;
+}
+
+function validCalendarDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 function normalizeVaultPath(path: string): string | null {
@@ -115,7 +151,7 @@ function extractCommentEvidence(markdown: string): string[] {
   const evidence: string[] = [];
   let activeLevel: number | null = null;
 
-  for (const line of markdown.split(/\r?\n/)) {
+  for (const line of visibleMarkdownLines(markdown)) {
     const heading = /^\s*(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading !== null) {
       const level = heading[1]?.length ?? 0;

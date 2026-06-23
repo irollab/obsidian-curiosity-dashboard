@@ -53,6 +53,10 @@ describe('ReviewMetricsService', () => {
     await expect(service.load('C:\\outside.md')).resolves.toMatchObject({
       path: '60-发布复盘/new.md',
     });
+    vault.directories.add('60-发布复盘/folder.md');
+    await expect(service.load('60-发布复盘/folder.md')).resolves.toMatchObject({
+      path: '60-发布复盘/new.md',
+    });
   });
 
   it('selects the latest parseable frontmatter date and ignores undated or invalid dates', async () => {
@@ -98,6 +102,25 @@ describe('ReviewMetricsService', () => {
     const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
 
     expect(result.path).toBe('60-发布复盘/a.md');
+  });
+
+  it('parses and orders Vault date-time formats with optional seconds', async () => {
+    const vault = new FakeVaultGateway();
+    const reviews = [
+      ['morning.md', { created: '2026-06-23 09:30' }],
+      ['later.md', { created: '2026-06-23 10:15:30' }],
+      ['invalid-time.md', { created: '2026-06-24 25:00', publish_date: '2026-06-23 11:00' }],
+      ['iso.md', { created: '2026-06-23T10:30:00Z' }],
+    ] as const;
+    for (const [name, frontmatter] of reviews) {
+      const path = `60-发布复盘/${name}`;
+      vault.files.set(path, reviewTable(name));
+      vault.metadata.set(path, frontmatter);
+    }
+
+    const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
+
+    expect(result.path).toBe('60-发布复盘/invalid-time.md');
   });
 
   it('collects every exact supported section and stops at a same-level heading', async () => {
@@ -160,6 +183,31 @@ describe('ReviewMetricsService', () => {
       '更深层证据',
       '第二段证据',
     ]);
+  });
+
+  it('ignores comment evidence inside code blocks and HTML comments', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(
+      '60-发布复盘/visible-comments.md',
+      [
+        '## 评论反馈',
+        '- 可见证据',
+        '~~~markdown',
+        '- 围栏伪证据',
+        '~~~',
+        '    - 缩进伪证据',
+        '<!--',
+        '- 注释伪证据',
+        '-->',
+        '### 分类',
+        '- 子标题可见证据',
+      ].join('\n'),
+    );
+    vault.metadata.set('60-发布复盘/visible-comments.md', { created: '2026-06-23' });
+
+    const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
+
+    expect(result.commentEvidence).toEqual(['可见证据', '子标题可见证据']);
   });
 
   it('returns an empty result when no eligible review exists', async () => {

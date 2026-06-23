@@ -156,4 +156,98 @@ describe('parseReviewMetrics', () => {
 
     expect(parseReviewMetrics(markdown)[0]).toMatchObject({ platform: 'YouTube', views: '15' });
   });
+
+  it('ignores tables and platform declarations in fenced code, indented code, and HTML comments', () => {
+    const markdown = [
+      '````markdown',
+      '平台：伪平台',
+      '```',
+      '| 平台 | 播放 |',
+      '| --- | ---: |',
+      '| 伪平台 | 999 |',
+      '```',
+      '````',
+      '    | 平台 | 播放 |',
+      '    | --- | ---: |',
+      '    | 缩进代码 | 888 |',
+      '<!--',
+      '平台：注释平台',
+      '| 平台 | 播放 |',
+      '| --- | ---: |',
+      '| 注释平台 | 777 |',
+      '-->',
+      '| 平台 | 播放 |',
+      '| --- | ---: |',
+      '| B站 | 42 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([
+      {
+        platform: 'B站',
+        collectedAt: null,
+        views: '42',
+        likes: null,
+        favorites: null,
+        comments: null,
+        shares: null,
+      },
+    ]);
+  });
+
+  it('does not reuse a platform declaration across an ATX heading boundary', () => {
+    const markdown = [
+      '## 抖音',
+      '- 平台：抖音',
+      '一些正文',
+      '## B站',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
+
+  it('does not use a platform declaration hidden in code or an HTML comment', () => {
+    const markdown = [
+      '```text',
+      '平台：围栏平台',
+      '```',
+      '<!-- 平台：注释平台 -->',
+      '    平台：缩进平台',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
+
+  it('uses the nearest platform declaration in the same section', () => {
+    const markdown = [
+      '## B站',
+      '说明文字',
+      '- 平台：B站',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)[0]).toMatchObject({ platform: 'B站', views: '50' });
+  });
+
+  it('does not reuse a platform declaration across a previous Markdown table', () => {
+    const markdown = [
+      '平台：抖音',
+      '| 字段 | 内容 |',
+      '| --- | --- |',
+      '| 备注 | 示例 |',
+      '',
+      '| 时间点 | 播放 |',
+      '| --- | ---: |',
+      '| 24小时 | 50 |',
+    ].join('\n');
+
+    expect(parseReviewMetrics(markdown)).toEqual([]);
+  });
 });
