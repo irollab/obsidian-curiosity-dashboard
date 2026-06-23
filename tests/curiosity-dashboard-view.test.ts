@@ -150,6 +150,9 @@ vi.mock('obsidian', () => ({
   TFile: class {},
   TFolder: class {},
   normalizePath: (path: string) => path,
+  setIcon: (element: { setAttr(name: string, value: string): void }, icon: string) => {
+    element.setAttr('data-icon', icon);
+  },
 }));
 
 const model: DashboardModel = {

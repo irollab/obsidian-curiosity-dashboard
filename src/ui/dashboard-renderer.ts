@@ -1,8 +1,13 @@
-import type { ChecklistTask, DashboardModel } from '@/domain/models';
+import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
 
 import { renderHero } from './renderers/hero';
 import { renderMissionControl } from './renderers/mission-control';
+import { renderThisWeek } from './renderers/this-week';
+import { renderProductionQueue } from './renderers/production-queue';
+import { renderChannelPulse } from './renderers/channel-pulse';
+import { renderQuickActions } from './renderers/quick-actions';
+import { renderDock } from './renderers/dock';
 
 export type DashboardTab = 'overview' | 'tasks' | 'data';
 export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
@@ -14,6 +19,9 @@ export interface DashboardHandlers {
   openSettings(): void;
   selectTab(tab: DashboardTab): Promise<void>;
   setAssociation(topicPath: string, field: AssociationField, value: string): Promise<void>;
+  createTopic?(): void;
+  createScript?(topic: TopicRecord): void;
+  createReview?(topic: TopicRecord): void;
 }
 
 const TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
@@ -84,8 +92,22 @@ export class DashboardRenderer {
         },
       });
       panel.hidden = !active;
-      if (active && id !== 'data') renderMissionControl(panel, model, handlers);
+      if (!active) continue;
+      if (id === 'overview') {
+        renderMissionControl(panel, model, handlers);
+        renderThisWeek(panel, model.thisWeek, handlers.openPath);
+        renderProductionQueue(panel, model.queue, handlers.openPath);
+        renderChannelPulse(panel, model, handlers.openPath);
+        renderQuickActions(panel, model, handlers);
+      } else if (id === 'tasks') {
+        renderMissionControl(panel, model, handlers);
+        renderThisWeek(panel, model.thisWeek, handlers.openPath);
+      } else {
+        renderChannelPulse(panel, model, handlers.openPath);
+      }
     }
+
+    renderDock(shell, model, handlers);
 
     const activeButton = buttons.find(({ id }) => id === activeTab)?.button;
     if (activeButton === undefined) throw new Error(`Unknown dashboard tab: ${activeTab}`);

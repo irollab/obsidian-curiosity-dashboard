@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('obsidian', () => ({
+  setIcon: vi.fn((element: { setAttr(name: string, value: string): void }, icon: string) => {
+    element.setAttr('data-icon', icon);
+  }),
+}));
+
 import type { DashboardModel, TopicRecord } from '@/domain/models';
 import { DashboardRenderer, type DashboardHandlers } from '@/ui/dashboard-renderer';
 

@@ -62,6 +62,7 @@ vi.mock('obsidian', () => {
     TFile: class {},
     TFolder: class {},
     normalizePath: (path: string) => path,
+    setIcon: vi.fn(),
   };
 });
 
