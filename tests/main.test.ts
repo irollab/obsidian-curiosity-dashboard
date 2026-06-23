@@ -8,7 +8,7 @@ import { CuriosityDashboardView } from '../src/curiosity-dashboard-view';
 import { DashboardSettingTab, DEFAULT_SETTINGS } from '../src/settings';
 
 interface EventRegistration {
-  callback: (value?: unknown) => void;
+  callback: (...values: unknown[]) => void;
   name: string;
   source: 'metadata' | 'vault' | 'workspace';
 }
@@ -80,7 +80,7 @@ function makeApp() {
     view: {},
   };
   const event = (source: EventRegistration['source']) =>
-    vi.fn((name: string, callback: (value?: unknown) => void) => {
+    vi.fn((name: string, callback: (...values: unknown[]) => void) => {
       const registration = { callback, name, source };
       obsidianMock.events.push(registration);
       return registration;
@@ -372,13 +372,61 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     const plugin = makePlugin(app);
     await plugin.onload();
 
-    obsidianMock.events[0]?.callback();
-    obsidianMock.events[1]?.callback();
+    obsidianMock.events[0]?.callback({ path: '10-选题池/39.md' });
+    obsidianMock.events[1]?.callback({ path: '60-发布复盘/39.md' });
     await vi.advanceTimersByTimeAsync(199);
     expect(activeView.refresh).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
 
     expect(workspace.getActiveViewOfType).toHaveBeenCalledWith(CuriosityDashboardView);
+    expect(activeView.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores unrelated modify storms and still merges relevant events once', async () => {
+    vi.useFakeTimers();
+    const { app, workspace } = makeApp();
+    const activeView = { refresh: vi.fn(async () => undefined) };
+    workspace.getActiveViewOfType.mockReturnValue(activeView);
+    const plugin = makePlugin(app);
+    await plugin.onload();
+    const modify = obsidianMock.events.find(
+      ({ source, name }) => source === 'vault' && name === 'modify',
+    );
+    const create = obsidianMock.events.find(
+      ({ source, name }) => source === 'vault' && name === 'create',
+    );
+
+    for (let index = 0; index < 100; index += 1) {
+      modify?.callback({ path: `附件/${index}.png` });
+    }
+    await vi.advanceTimersByTimeAsync(200);
+    expect(activeView.refresh).not.toHaveBeenCalled();
+
+    modify?.callback({ path: '10-选题池/39.md' });
+    create?.callback({ path: '40-脚本大纲/39.md' });
+    modify?.callback({ path: '60-发布复盘/39.md' });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(activeView.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes the current external review path, including a file created later', async () => {
+    vi.useFakeTimers();
+    const { app, workspace } = makeApp();
+    const activeView = { refresh: vi.fn(async () => undefined) };
+    workspace.getActiveViewOfType.mockReturnValue(activeView);
+    const plugin = makePlugin(app);
+    await plugin.onload();
+    plugin.updateObservedDataPaths([' archive\\explicit.md ']);
+
+    obsidianMock.events.find(
+      ({ source, name }) => source === 'vault' && name === 'create',
+    )?.callback({ path: 'archive/explicit.md' });
+    obsidianMock.events.find(
+      ({ source, name }) => source === 'metadata' && name === 'changed',
+    )?.callback({ path: 'archive/explicit.md' });
+    await vi.advanceTimersByTimeAsync(200);
+
     expect(activeView.refresh).toHaveBeenCalledTimes(1);
   });
 
@@ -392,7 +440,7 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     const plugin = makePlugin(app);
     await plugin.onload();
 
-    obsidianMock.events.find(({ source }) => source === 'vault')?.callback();
+    obsidianMock.events.find(({ source }) => source === 'vault')?.callback({ path: '10-选题池/39.md' });
     await vi.advanceTimersByTimeAsync(200);
     expect(activeView.refresh).not.toHaveBeenCalled();
 
@@ -494,7 +542,7 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
     workspace.getActiveViewOfType.mockReturnValue(activeView);
     const plugin = makePlugin(app);
     await plugin.onload();
-    obsidianMock.events[0]?.callback();
+    obsidianMock.events[0]?.callback({ path: '10-选题池/39.md' });
 
     plugin.onunload();
     await vi.runAllTimersAsync();

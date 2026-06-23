@@ -16,9 +16,9 @@ export class ReviewMetricsService {
 
   async load(explicitPath: string | null): Promise<ReviewResult> {
     const markdownPaths = this.markdownPaths();
-    const explicit =
-      explicitPath === null ? null : this.safeMarkdownPath(explicitPath, markdownPaths);
-    const path = explicit ?? this.latestDatedReview(markdownPaths);
+    const path = explicitPath === null
+      ? this.latestDatedReview(markdownPaths)
+      : this.safeMarkdownPath(explicitPath, markdownPaths);
     if (path === null) return { path: null, metrics: [], commentEvidence: [] };
 
     const markdown = await this.vault.read(path);

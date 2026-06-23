@@ -222,8 +222,8 @@ describe('DashboardDataService', () => {
 
     const model = await service(vault).load(false);
 
-    expect(model.reviewPath).toBe('60-发布复盘/fallback.md');
-    expect(model.metrics[0]?.views).toBe('100');
+    expect(model.reviewPath).toBeNull();
+    expect(model.metrics).toEqual([]);
   });
 
   it('retries when the selected focus is renamed before it can be read', async () => {
@@ -270,7 +270,7 @@ describe('DashboardDataService', () => {
     expect(model.metrics[0]?.views).toBe('100');
   });
 
-  it('detects deletion of an explicit review outside the configured review directory', async () => {
+  it('does not expose another work metrics when an explicit review disappears', async () => {
     const vault = new HookVaultGateway();
     addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
       issue: 39,
@@ -295,8 +295,8 @@ describe('DashboardDataService', () => {
     expect(model.focus.kind).toBe('ready');
     if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
     expect(model.focus.topic.reviewPath).toBe('archive/explicit.md');
-    expect(model.reviewPath).toBe('60-发布复盘/fallback.md');
-    expect(model.metrics[0]?.views).toBe('100');
+    expect(model.reviewPath).toBeNull();
+    expect(model.metrics).toEqual([]);
   });
 
   it.each([

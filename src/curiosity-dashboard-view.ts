@@ -109,6 +109,7 @@ export class CuriosityDashboardView extends ItemView {
       createScript: (topic) => this.runCreate('script', topic),
       createReview: (topic) => this.runCreate('review', topic),
     }, this.activeTab);
+    this.plugin.updateObservedDataPaths(observedReviewPaths(model));
     if (focusActiveTab) activeButton.focus();
   }
 
@@ -425,6 +426,13 @@ function currentFocusTopic(model: DashboardModel): TopicRecord | null {
   return model.focus.kind === 'ready' || model.focus.kind === 'invalid-stage'
     ? model.focus.topic
     : null;
+}
+
+function observedReviewPaths(model: DashboardModel): string[] {
+  const topic = currentFocusTopic(model);
+  return [...new Set([topic?.reviewPath, model.reviewPath].filter(
+    (path): path is string => path !== null && path !== undefined,
+  ))];
 }
 
 function joinVaultPath(directory: string, filename: string): string {

@@ -33,7 +33,7 @@ describe('ReviewMetricsService', () => {
     });
   });
 
-  it('falls back from unsafe or non-Markdown explicit paths to the latest dated review', async () => {
+  it('returns empty data for unsafe, missing, folder, or non-Markdown explicit paths', async () => {
     const vault = reviewVault();
     vault.files.set('outside.md', 'outside');
     vault.metadata.set('outside.md', { created: '2099-01-01' });
@@ -41,22 +41,14 @@ describe('ReviewMetricsService', () => {
     vault.metadata.set('C:/outside.md', { created: '2099-01-02' });
 
     const service = new ReviewMetricsService(vault, '60-发布复盘');
-    await expect(service.load('60-发布复盘/not-markdown.txt')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
-    });
-    await expect(service.load('60-发布复盘/../outside.md')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
-    });
-    await expect(service.load('/outside.md')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
-    });
-    await expect(service.load('C:\\outside.md')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
-    });
+    const empty = { path: null, metrics: [], commentEvidence: [] };
+    await expect(service.load('60-发布复盘/not-markdown.txt')).resolves.toEqual(empty);
+    await expect(service.load('60-发布复盘/missing.md')).resolves.toEqual(empty);
+    await expect(service.load('60-发布复盘/../outside.md')).resolves.toEqual(empty);
+    await expect(service.load('/outside.md')).resolves.toEqual(empty);
+    await expect(service.load('C:\\outside.md')).resolves.toEqual(empty);
     vault.directories.add('60-发布复盘/folder.md');
-    await expect(service.load('60-发布复盘/folder.md')).resolves.toMatchObject({
-      path: '60-发布复盘/new.md',
-    });
+    await expect(service.load('60-发布复盘/folder.md')).resolves.toEqual(empty);
   });
 
   it('selects the latest parseable frontmatter date and ignores undated or invalid dates', async () => {

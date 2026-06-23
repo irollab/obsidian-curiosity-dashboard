@@ -6,6 +6,11 @@ import { TemplateCreationService } from '@/mutations/template-creation-service';
 import { VaultMutationService } from '@/mutations/vault-mutation-service';
 import type { VaultGateway } from '@/ports/vault-gateway';
 import { DebouncedRefresh } from '@/refresh-controller';
+import {
+  isRelevantVaultChange,
+  normalizeObservedPaths,
+  type VaultChange,
+} from '@/relevant-vault-change';
 
 import { DASHBOARD_VIEW_TYPE } from './constants';
 import { CuriosityDashboardView } from './curiosity-dashboard-view';
@@ -23,6 +28,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
   private refreshScheduler: DebouncedRefresh | null = null;
   private saveQueue: Promise<void> = Promise.resolve();
   private unloaded = false;
+  private observedDataPaths: ReadonlySet<string> = new Set();
 
   override async onload(): Promise<void> {
     this.unloaded = false;
@@ -54,11 +60,16 @@ export default class CuriosityDashboardPlugin extends Plugin {
       },
     });
 
-    this.registerEvent(this.app.vault.on('create', () => this.scheduleRefresh()));
-    this.registerEvent(this.app.vault.on('modify', () => this.scheduleRefresh()));
-    this.registerEvent(this.app.vault.on('delete', () => this.scheduleRefresh()));
-    this.registerEvent(this.app.vault.on('rename', () => this.scheduleRefresh()));
-    this.registerEvent(this.app.metadataCache.on('changed', () => this.scheduleRefresh()));
+    this.registerEvent(this.app.vault.on('create', (file) =>
+      this.handleVaultChange({ kind: 'create', path: file.path })));
+    this.registerEvent(this.app.vault.on('modify', (file) =>
+      this.handleVaultChange({ kind: 'modify', path: file.path })));
+    this.registerEvent(this.app.vault.on('delete', (file) =>
+      this.handleVaultChange({ kind: 'delete', path: file.path })));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) =>
+      this.handleVaultChange({ kind: 'rename', path: file.path, oldPath })));
+    this.registerEvent(this.app.metadataCache.on('changed', (file) =>
+      this.handleVaultChange({ kind: 'metadata', path: file.path })));
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', (leaf) => {
         if (
@@ -105,6 +116,10 @@ export default class CuriosityDashboardPlugin extends Plugin {
 
   templateService(): TemplateCreationService {
     return new TemplateCreationService(this.gateway);
+  }
+
+  updateObservedDataPaths(paths: Iterable<string>): void {
+    this.observedDataPaths = normalizeObservedPaths(paths);
   }
 
   activateView(): Promise<void> {
@@ -155,6 +170,12 @@ export default class CuriosityDashboardPlugin extends Plugin {
 
   private scheduleRefresh(): void {
     this.refreshScheduler?.schedule();
+  }
+
+  private handleVaultChange(change: VaultChange): void {
+    if (isRelevantVaultChange(change, this.settings, this.observedDataPaths)) {
+      this.scheduleRefresh();
+    }
   }
 
   private async refreshActiveView(): Promise<void> {

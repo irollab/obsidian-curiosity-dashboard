@@ -201,6 +201,7 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
     templateService: () => ({ create: templateCreate }),
+    updateObservedDataPaths: vi.fn(),
   };
   const view = new CuriosityDashboardView(
     { app: { setting, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
@@ -233,6 +234,38 @@ describe('CuriosityDashboardView', () => {
     vi.unstubAllGlobals();
     modalMock.confirmAsk.mockReset().mockResolvedValue(false);
     modalMock.createAsk.mockReset().mockResolvedValue(null);
+  });
+
+  it('publishes current explicit review paths after a successful model render', async () => {
+    const focused: DashboardModel = {
+      ...model,
+      focus: {
+        kind: 'ready',
+        topic: {
+          assetPath: null,
+          basename: '39',
+          dueDate: null,
+          homepageFocus: true,
+          issue: 39,
+          nextAction: null,
+          path: '10-选题池/39.md',
+          priority: null,
+          reviewPath: 'archive\\explicit.md',
+          scriptPath: null,
+          stage: '制作',
+          status: '已立项',
+          title: 'Focus',
+        },
+      },
+      reviewPath: null,
+    };
+    const harness = makeHarness(async () => focused);
+
+    await harness.view.refresh();
+
+    expect(harness.plugin.updateObservedDataPaths).toHaveBeenCalledWith([
+      'archive\\explicit.md',
+    ]);
   });
 
   it('renders loading before replacing it with the loaded shell', async () => {
