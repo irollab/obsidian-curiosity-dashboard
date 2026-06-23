@@ -118,10 +118,9 @@ interface PathSnapshot {
 }
 
 function capturePaths(vault: VaultGateway): PathSnapshot {
-  const files = normalizedSet(vault.listPaths());
   return {
-    files,
-    markdown: new Set([...files].filter((path) => path.endsWith('.md'))),
+    files: normalizedSet(vault.listPaths()),
+    markdown: normalizedSet(vault.listMarkdownPaths()),
     folders: normalizedSet(vault.listFolders()),
   };
 }

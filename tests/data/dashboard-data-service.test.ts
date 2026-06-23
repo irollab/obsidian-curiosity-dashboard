@@ -172,6 +172,60 @@ describe('DashboardDataService', () => {
     expect(second.queue.map((topic) => topic.issue)).toEqual([40]);
   });
 
+  it('preserves the gateway Markdown semantics for uppercase extensions', async () => {
+    const vault = new SemanticMarkdownVaultGateway(['10-选题池/39-Topic.MD']);
+    addTopic(vault, '10-选题池/39-Topic.MD', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('ready');
+    if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+    expect(model.focus.topic.path).toBe('10-选题池/39-Topic.MD');
+    expect(model.tasks).toHaveLength(2);
+  });
+
+  it('excludes md-looking files that the gateway does not classify as Markdown', async () => {
+    const vault = new SemanticMarkdownVaultGateway([]);
+    addTopic(vault, '10-选题池/39-Fake.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    addReview(vault, '60-发布复盘/fake.md', '999', '2026-06-22');
+    vault.files.set('40-脚本大纲/39-fake.md', '# Fake script');
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('none');
+    expect(model.reviewPath).toBeNull();
+    expect(model.metrics).toEqual([]);
+    expect(model.associationCandidates).toEqual({ scriptPath: [], assetPath: [], reviewPath: [] });
+  });
+
+  it('requires an external explicit review to belong to the gateway Markdown set', async () => {
+    const vault = new SemanticMarkdownVaultGateway([
+      '10-选题池/39-Focus.md',
+      '60-发布复盘/fallback.md',
+    ]);
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+      review_path: 'archive/not-markdown.md',
+    });
+    addReview(vault, 'archive/not-markdown.md', '999', '2026-06-23');
+    addReview(vault, '60-发布复盘/fallback.md', '100', '2026-06-22');
+
+    const model = await service(vault).load(false);
+
+    expect(model.reviewPath).toBe('60-发布复盘/fallback.md');
+    expect(model.metrics[0]?.views).toBe('100');
+  });
+
   it('retries when the selected focus is renamed before it can be read', async () => {
     const vault = new HookVaultGateway();
     addTopic(vault, '10-选题池/39-Old.md', CHECKLIST, {
@@ -360,7 +414,7 @@ describe('DashboardDataService', () => {
       '10-选题池/39-Focus.md',
       '60-发布复盘/39.md',
     ]);
-    expect(vault.markdownScans).toBe(0);
+    expect(vault.markdownScans).toBe(2);
     expect(vault.fileScans).toBe(2);
     expect(vault.folderScans).toBe(2);
   });
@@ -379,7 +433,7 @@ describe('DashboardDataService', () => {
 
     await service(vault).load(false);
 
-    expect(vault.markdownScans).toBe(0);
+    expect(vault.markdownScans).toBeLessThanOrEqual(2);
     expect(vault.fileScans).toBeLessThanOrEqual(2);
     expect(vault.folderScans).toBeLessThanOrEqual(2);
   });
@@ -528,7 +582,9 @@ class HookVaultGateway extends FakeVaultGateway {
 
   override listMarkdownPaths(): string[] {
     this.markdownScans += 1;
-    return super.listMarkdownPaths();
+    return [...this.files.keys()]
+      .map((path) => path.replace(/\\/g, '/').replace(/^\/+/, ''))
+      .filter((path) => path.endsWith('.md'));
   }
 
   override listFolders(): string[] {
@@ -544,5 +600,15 @@ class HookVaultGateway extends FakeVaultGateway {
     hook?.(normalized);
     if (this.readError !== null) throw this.readError;
     return super.read(normalized);
+  }
+}
+
+class SemanticMarkdownVaultGateway extends FakeVaultGateway {
+  constructor(private readonly markdownPaths: string[]) {
+    super();
+  }
+
+  override listMarkdownPaths(): string[] {
+    return [...this.markdownPaths];
   }
 }
