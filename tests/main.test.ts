@@ -521,4 +521,18 @@ describe('CuriosityDashboardPlugin lifecycle', () => {
 
     expect(newLeaf.detach).toHaveBeenCalledTimes(1);
   });
+
+  it('does not create a leaf when unload happens before the activation microtask starts', async () => {
+    const { app, newLeaf, workspace } = makeApp();
+    const plugin = makePlugin(app);
+    await plugin.onload();
+
+    const activation = plugin.activateView();
+    plugin.onunload();
+    await activation;
+
+    expect(workspace.getLeaf).not.toHaveBeenCalled();
+    expect(newLeaf.setViewState).not.toHaveBeenCalled();
+    expect(newLeaf.detach).not.toHaveBeenCalled();
+  });
 });

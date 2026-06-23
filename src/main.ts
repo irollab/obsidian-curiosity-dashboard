@@ -121,6 +121,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
   }
 
   private async activateViewOnce(): Promise<void> {
+    if (this.unloaded) return;
     let leaf: WorkspaceLeaf | null = null;
     let created = false;
     try {
