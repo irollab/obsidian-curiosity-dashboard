@@ -38,6 +38,8 @@ export class CreateFileModal extends Modal {
   override onOpen(): void {
     const titleId = 'curiosity-create-file-title';
     const errorId = 'curiosity-create-file-error';
+    this.modalEl.addClass('curiosity-modal', 'curiosity-modal--create');
+    this.contentEl.addClass('curiosity-modal-content');
     this.modalEl.setAttribute('aria-labelledby', titleId);
     this.contentEl.createEl('h2', { text: this.defaults.heading, attr: { id: titleId } });
     new Setting(this.contentEl)

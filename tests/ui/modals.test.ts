@@ -4,6 +4,7 @@ const obsidianMock = vi.hoisted(() => {
   class Element {
     readonly children: Element[] = [];
     readonly attributes = new Map<string, string>();
+    readonly classes = new Set<string>();
     text = '';
 
     createEl(_tag: string, options: { attr?: Record<string, string>; cls?: string; text?: string } = {}) {
@@ -18,6 +19,10 @@ const obsidianMock = vi.hoisted(() => {
 
     empty(): void {
       this.children.length = 0;
+    }
+
+    addClass(...values: string[]): void {
+      for (const value of values) this.classes.add(value);
     }
 
     setText(value: string): void {
@@ -184,6 +189,9 @@ describe('ConfirmStageModal', () => {
     expect(obsidianMock.state.lastModal?.modalEl.getAttribute('aria-labelledby')).toBe(
       'curiosity-confirm-stage-title',
     );
+    expect(obsidianMock.state.lastModal?.modalEl.classes).toContain('curiosity-modal');
+    expect(obsidianMock.state.lastModal?.modalEl.classes).toContain('curiosity-modal--confirm');
+    expect(obsidianMock.state.lastModal?.contentEl.classes).toContain('curiosity-modal-content');
     button('推进').trigger();
     button('推进').trigger();
 
@@ -236,6 +244,9 @@ describe('CreateFileModal', () => {
     expect(obsidianMock.state.lastModal?.modalEl.getAttribute('aria-labelledby')).toBe(
       'curiosity-create-file-title',
     );
+    expect(obsidianMock.state.lastModal?.modalEl.classes).toContain('curiosity-modal');
+    expect(obsidianMock.state.lastModal?.modalEl.classes).toContain('curiosity-modal--create');
+    expect(obsidianMock.state.lastModal?.contentEl.classes).toContain('curiosity-modal-content');
     const error = obsidianMock.state.lastModal?.contentEl.children.find((child) =>
       child.getAttribute('role') === 'alert');
     expect(error?.getAttribute('id')).toBe('curiosity-create-file-error');
