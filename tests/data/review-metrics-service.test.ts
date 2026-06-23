@@ -220,6 +220,38 @@ describe('ReviewMetricsService', () => {
     ]);
   });
 
+  it('resets list context at ATX headings with one to three leading spaces', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(
+      '60-发布复盘/heading-list-boundary.md',
+      [
+        '## 评论反馈',
+        '- 父需求 1',
+        ' ### 分类 1',
+        '    - 伪子需求 1',
+        '- 父需求 2',
+        '  ### 分类 2',
+        '    - 伪子需求 2',
+        '- 父需求 3',
+        '   ### 分类 3',
+        '    - 伪子需求 3',
+        '- 合法父需求',
+        '    - 合法子需求',
+      ].join('\n'),
+    );
+    vault.metadata.set('60-发布复盘/heading-list-boundary.md', { created: '2026-06-23' });
+
+    const result = await new ReviewMetricsService(vault, '60-发布复盘').load(null);
+
+    expect(result.commentEvidence).toEqual([
+      '父需求 1',
+      '父需求 2',
+      '父需求 3',
+      '合法父需求',
+      '合法子需求',
+    ]);
+  });
+
   it('returns an empty result when no eligible review exists', async () => {
     const vault = new FakeVaultGateway();
     vault.files.set('60-发布复盘/undated.md', reviewTable('99'));

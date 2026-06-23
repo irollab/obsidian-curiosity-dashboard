@@ -70,6 +70,7 @@ export function visibleMarkdownLines(markdown: string): string[] {
     }
 
     const withoutComments = stripHtmlComments(line, commentState);
+    if (parseHeading(withoutComments, 0) !== null) listLevels.length = 0;
     const listItem = parseListItem(withoutComments);
     const indentation = indentationWidth(/^([ \t]*)/.exec(withoutComments)?.[1] ?? '');
     if (indentation >= 4 && !isNestedListItem(listItem, listLevels)) return '';
