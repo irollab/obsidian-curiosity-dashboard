@@ -88,6 +88,8 @@ describe('TemplateCreationService', () => {
     ['template', { templatePath: '99-模板/./topic.md' }],
     ['template', { templatePath: '99-模板//topic.md' }],
     ['template', { templatePath: '99-模板/topic.md\u0000' }],
+    ['template', { templatePath: '99-模板/folder./topic.md' }],
+    ['template', { templatePath: '99-模板/AUX/topic.md' }],
     ['target', { targetPath: 'C:outside.md' }],
     ['target', { targetPath: '\\outside.md' }],
     ['target', { targetPath: '../outside.md' }],
@@ -116,6 +118,61 @@ describe('TemplateCreationService', () => {
     );
 
     await expect(vault.read('10-选题池/39-Test.md')).resolves.toBe('# Test');
+  });
+
+  it.each([
+    'safe/existing.txt:stream.md',
+    'folder./file.md',
+    'folder /file.md',
+    'CON.md',
+    'dir/AUX/file.md',
+    'dir/com¹.md/file.md',
+    'safe/control\u001f/file.md',
+  ])('rejects the unsafe cross-platform target alias %s without changing files', async (targetPath) => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(TEMPLATE_PATH, '# template');
+    vault.files.set('safe/existing.txt', '# existing');
+    const before = new Map(vault.files);
+    const service = new TemplateCreationService(vault);
+
+    await expect(service.create(createRequest({ targetPath }))).rejects.toThrow(
+      'inside the vault',
+    );
+    expect(vault.files).toEqual(before);
+  });
+
+  it('refuses a target whose case-insensitive alias already exists', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(TEMPLATE_PATH, '# template');
+    vault.files.set('safe/Existing.md', '# existing');
+    const service = new TemplateCreationService(vault);
+
+    await expect(
+      service.create(createRequest({ targetPath: 'SAFE/existing.md' })),
+    ).rejects.toThrow('Target already exists');
+    await expect(vault.read('safe/Existing.md')).resolves.toBe('# existing');
+  });
+
+  it('uses the canonical template path for a unique case-insensitive match', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set('99-模板/Topic.md', '# {{title}}');
+    const service = new TemplateCreationService(vault);
+
+    await service.create(createRequest({ templatePath: '99-模板/TOPIC.md' }));
+
+    await expect(vault.read('10-选题池/39-Test.md')).resolves.toBe('# Test');
+  });
+
+  it('rejects an ambiguous case-insensitive template match', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set('99-模板/Topic.md', '# first');
+    vault.files.set('99-模板/topic.md', '# second');
+    const service = new TemplateCreationService(vault);
+
+    await expect(
+      service.create(createRequest({ templatePath: '99-模板/TOPIC.md' })),
+    ).rejects.toThrow('Template path is ambiguous');
+    expect(vault.exists('10-选题池/39-Test.md')).toBe(false);
   });
 
   it.each([

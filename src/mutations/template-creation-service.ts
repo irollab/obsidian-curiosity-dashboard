@@ -10,6 +10,7 @@ export interface CreateRequest {
 const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i;
 const KNOWN_TEMPLATE_TOKEN = /\{\{(title|issue|date)\}\}/g;
 const FORBIDDEN_FILENAME_CHARACTERS = /[\u0000-\u001F\u007F-\u009F<>:"/\\|?*]+/g;
+const FORBIDDEN_PATH_SEGMENT_CHARACTER = /[\u0000-\u001F\u007F-\u009F<>:"|?*]/;
 const REPLACEMENT_MARKER = '\u0000';
 
 export const sanitizeTitle = (title: string): string => {
@@ -49,17 +50,18 @@ export class TemplateCreationService {
       throw new Error('Issue must be a positive safe integer');
     }
 
-    const markdownPaths = new Set(
-      this.vault.listMarkdownPaths().map((path) => path.replaceAll('\\', '/')),
+    const canonicalTemplatePath = resolveMarkdownPath(
+      templatePath,
+      this.vault.listMarkdownPaths(),
     );
-    if (!markdownPaths.has(templatePath)) {
-      throw new Error(`Template not found: ${templatePath}`);
-    }
-    if (this.vault.exists(targetPath)) {
+    const existingPaths = [...this.vault.listPaths(), ...this.vault.listFolders()].map((path) =>
+      path.replaceAll('\\', '/').toLowerCase(),
+    );
+    if (this.vault.exists(targetPath) || existingPaths.includes(targetPath.toLowerCase())) {
       throw new Error(`Target already exists: ${targetPath}`);
     }
 
-    const template = await this.vault.read(templatePath);
+    const template = await this.vault.read(canonicalTemplatePath);
     const values: Record<'title' | 'issue' | 'date', string> = {
       title: request.title,
       issue: String(request.issue),
@@ -82,12 +84,37 @@ const normalizeVaultPath = (path: string): string => {
   const segments = normalized.split('/');
   if (
     normalized.startsWith('/') ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+    segments.some(
+      (segment) =>
+        segment === '' ||
+        segment === '.' ||
+        segment === '..' ||
+        FORBIDDEN_PATH_SEGMENT_CHARACTER.test(segment) ||
+        /[. ]$/.test(segment) ||
+        WINDOWS_DEVICE_NAME.test(segment),
+    )
   ) {
     throw new Error('Path must stay inside the vault');
   }
 
   return normalized;
+};
+
+const resolveMarkdownPath = (requestedPath: string, markdownPaths: string[]): string => {
+  const canonicalPaths = markdownPaths.map((path) => path.replaceAll('\\', '/'));
+  const exactMatch = canonicalPaths.find((path) => path === requestedPath);
+  if (exactMatch !== undefined) return exactMatch;
+
+  const foldedPath = requestedPath.toLowerCase();
+  const foldedMatches = canonicalPaths.filter((path) => path.toLowerCase() === foldedPath);
+  if (foldedMatches.length > 1) {
+    throw new Error(`Template path is ambiguous: ${requestedPath}`);
+  }
+  const uniqueMatch = foldedMatches[0];
+  if (uniqueMatch === undefined) {
+    throw new Error(`Template not found: ${requestedPath}`);
+  }
+  return uniqueMatch;
 };
 
 const isMarkdownFilePath = (path: string): boolean => {
