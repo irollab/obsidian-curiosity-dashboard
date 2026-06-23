@@ -1,13 +1,17 @@
 import { Notice, Plugin } from 'obsidian';
 
-import { DashboardSettingTab, DEFAULT_SETTINGS, type DashboardSettings } from './settings';
+import {
+  DashboardSettingTab,
+  DEFAULT_SETTINGS,
+  parseSettings,
+  type DashboardSettings,
+} from './settings';
 
 export default class CuriosityDashboardPlugin extends Plugin {
   settings: DashboardSettings = { ...DEFAULT_SETTINGS };
 
   override async onload(): Promise<void> {
-    const storedSettings = (await this.loadData()) as Partial<DashboardSettings> | null;
-    this.settings = { ...DEFAULT_SETTINGS, ...(storedSettings ?? {}) };
+    this.settings = parseSettings(await this.loadData());
     this.addSettingTab(new DashboardSettingTab(this.app, this));
     this.addCommand({
       id: 'open-curiosity-dashboard',

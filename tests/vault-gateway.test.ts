@@ -3,13 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { FakeVaultGateway } from './support/fake-vault-gateway';
 
 describe('FakeVaultGateway', () => {
-  it('lists all paths and only markdown paths', () => {
+  it('lists files, markdown files, and folders separately', () => {
     const vault = new FakeVaultGateway();
     vault.files.set('notes/topic.md', '# Topic');
     vault.files.set('assets/image.png', 'binary');
+    vault.directories.add('notes');
+    vault.directories.add('assets');
 
     expect(vault.listPaths()).toEqual(['notes/topic.md', 'assets/image.png']);
     expect(vault.listMarkdownPaths()).toEqual(['notes/topic.md']);
+    expect(vault.listFolders()).toEqual(['notes', 'assets']);
   });
 
   it('reads files and reports a missing file clearly', async () => {
@@ -33,6 +36,7 @@ describe('FakeVaultGateway', () => {
   it('copies frontmatter before mutation', async () => {
     const vault = new FakeVaultGateway();
     const original = { stage: '选题' };
+    vault.files.set('topic.md', '# Topic');
     vault.metadata.set('topic.md', original);
 
     await vault.updateFrontmatter('topic.md', (frontmatter) => {
@@ -45,7 +49,7 @@ describe('FakeVaultGateway', () => {
 
   it('creates without overwriting and resolves existing resources', async () => {
     const vault = new FakeVaultGateway();
-    await vault.create('asset folder/image.png', 'binary');
+    await vault.create('///asset folder\\image.png', 'binary');
 
     expect(vault.exists('asset folder/image.png')).toBe(true);
     expect(vault.resourceUrl('asset folder/image.png')).toBe('app://vault/asset%20folder%2Fimage.png');
@@ -54,5 +58,50 @@ describe('FakeVaultGateway', () => {
       'File exists: asset folder/image.png',
     );
     await expect(vault.read('asset folder/image.png')).resolves.toBe('binary');
+  });
+
+  it('normalizes paths consistently across operations', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set('\\notes\\topic.md', 'first');
+
+    await expect(vault.read('///notes/topic.md')).resolves.toBe('first');
+    await vault.process('\\notes\\topic.md', (content) => `${content} second`);
+    await vault.updateFrontmatter('/notes\\topic.md', (frontmatter) => {
+      frontmatter.stage = '制作';
+    });
+
+    expect(vault.listPaths()).toEqual(['notes/topic.md']);
+    expect(vault.listMarkdownPaths()).toEqual(['notes/topic.md']);
+    expect(vault.exists('/notes\\topic.md')).toBe(true);
+    expect(vault.getFrontmatter('\\notes/topic.md')).toEqual({ stage: '制作' });
+    expect(vault.resourceUrl('/notes\\topic.md')).toBe('app://vault/notes%2Ftopic.md');
+    await expect(vault.read('notes/topic.md')).resolves.toBe('first second');
+  });
+
+  it('rejects processing and frontmatter updates for missing files', async () => {
+    const vault = new FakeVaultGateway();
+
+    await expect(vault.process('/missing.md', (content) => content)).rejects.toThrow(
+      'Missing file: missing.md',
+    );
+    await expect(vault.updateFrontmatter('\\missing.md', () => undefined)).rejects.toThrow(
+      'Missing file: missing.md',
+    );
+    expect(vault.metadata.has('missing.md')).toBe(false);
+  });
+
+  it('treats folders as existing paths but never as file resources', async () => {
+    const vault = new FakeVaultGateway();
+    vault.directories.add('\\assets');
+
+    expect(vault.exists('/assets')).toBe(true);
+    expect(vault.resourceUrl('/assets')).toBeNull();
+    await expect(vault.create('/assets', 'content')).rejects.toThrow('File exists: assets');
+  });
+
+  it('rejects frontmatter lookup for a missing file like the real adapter', () => {
+    const vault = new FakeVaultGateway();
+
+    expect(() => vault.getFrontmatter('/missing.md')).toThrow('Missing file: missing.md');
   });
 });

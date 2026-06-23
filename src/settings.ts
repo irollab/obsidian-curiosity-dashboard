@@ -30,6 +30,42 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   enableMobileView: true,
 };
 
+const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'data']);
+
+export function parseSettings(raw: unknown): DashboardSettings {
+  const values = isRecord(raw) ? raw : {};
+  return {
+    topicDir: nonEmptyStringOr(values.topicDir, DEFAULT_SETTINGS.topicDir),
+    scriptDir: nonEmptyStringOr(values.scriptDir, DEFAULT_SETTINGS.scriptDir),
+    assetDir: nonEmptyStringOr(values.assetDir, DEFAULT_SETTINGS.assetDir),
+    reviewDir: nonEmptyStringOr(values.reviewDir, DEFAULT_SETTINGS.reviewDir),
+    topicTemplate: nonEmptyStringOr(values.topicTemplate, DEFAULT_SETTINGS.topicTemplate),
+    scriptTemplate: nonEmptyStringOr(values.scriptTemplate, DEFAULT_SETTINGS.scriptTemplate),
+    reviewTemplate: nonEmptyStringOr(values.reviewTemplate, DEFAULT_SETTINGS.reviewTemplate),
+    backgroundPath:
+      typeof values.backgroundPath === 'string' ? values.backgroundPath : DEFAULT_SETTINGS.backgroundPath,
+    openOnStartup:
+      typeof values.openOnStartup === 'boolean' ? values.openOnStartup : DEFAULT_SETTINGS.openOnStartup,
+    defaultTab: isDefaultTab(values.defaultTab) ? values.defaultTab : DEFAULT_SETTINGS.defaultTab,
+    enableMobileView:
+      typeof values.enableMobileView === 'boolean'
+        ? values.enableMobileView
+        : DEFAULT_SETTINGS.enableMobileView,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyStringOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function isDefaultTab(value: unknown): value is DashboardSettings['defaultTab'] {
+  return typeof value === 'string' && DEFAULT_TABS.has(value);
+}
+
 type TextSettingKey =
   | 'topicDir'
   | 'scriptDir'
@@ -59,8 +95,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 
     new Setting(this.containerEl).setName('Open on startup').addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.openOnStartup).onChange(async (value) => {
-        this.plugin.settings.openOnStartup = value;
-        await this.plugin.saveSettings();
+        await this.updateSetting('openOnStartup', value);
       }),
     );
 
@@ -69,8 +104,7 @@ export class DashboardSettingTab extends PluginSettingTab {
         .addOptions({ overview: 'Overview', tasks: 'Tasks', data: 'Data' })
         .setValue(this.plugin.settings.defaultTab)
         .onChange(async (value) => {
-          this.plugin.settings.defaultTab = value as DashboardSettings['defaultTab'];
-          await this.plugin.saveSettings();
+          if (isDefaultTab(value)) await this.updateSetting('defaultTab', value);
         }),
     );
 
@@ -78,8 +112,7 @@ export class DashboardSettingTab extends PluginSettingTab {
       .setName('Enable simplified mobile view')
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.enableMobileView).onChange(async (value) => {
-          this.plugin.settings.enableMobileView = value;
-          await this.plugin.saveSettings();
+          await this.updateSetting('enableMobileView', value);
         }),
       );
   }
@@ -87,9 +120,16 @@ export class DashboardSettingTab extends PluginSettingTab {
   private addText(name: string, key: TextSettingKey): void {
     new Setting(this.containerEl).setName(name).addText((text) =>
       text.setValue(this.plugin.settings[key]).onChange(async (value) => {
-        this.plugin.settings[key] = value.trim();
-        await this.plugin.saveSettings();
+        await this.updateSetting(key, value.trim());
       }),
     );
+  }
+
+  private async updateSetting<K extends keyof DashboardSettings>(
+    key: K,
+    value: DashboardSettings[K],
+  ): Promise<void> {
+    this.plugin.settings[key] = value;
+    await this.plugin.saveSettings();
   }
 }

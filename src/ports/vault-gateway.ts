@@ -1,8 +1,10 @@
 export type Frontmatter = Record<string, unknown>;
 
 export interface VaultGateway {
+  /** All file paths. Directories are returned by listFolders(). */
   listPaths(): string[];
   listMarkdownPaths(): string[];
+  listFolders(): string[];
   getFrontmatter(path: string): Frontmatter | null;
   read(path: string): Promise<string>;
   process(path: string, transform: (content: string) => string): Promise<void>;

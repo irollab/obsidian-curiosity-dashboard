@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from 'obsidian';
-import { TFile, normalizePath } from 'obsidian';
+import { TFile, TFolder, normalizePath } from 'obsidian';
 
 import { ObsidianVaultGateway } from '../src/adapters/obsidian-vault-gateway';
 
@@ -10,8 +10,13 @@ vi.mock('obsidian', () => {
     constructor(readonly path: string) {}
   }
 
+  class MockTFolder {
+    constructor(readonly path: string) {}
+  }
+
   return {
     TFile: MockTFile,
+    TFolder: MockTFolder,
     normalizePath: vi.fn((path: string) => `normalized:${path}`),
   };
 });
@@ -19,9 +24,11 @@ vi.mock('obsidian', () => {
 function makeApp() {
   const makeFile = (path: string): TFile =>
     Object.assign(Object.create(TFile.prototype) as TFile, { path });
+  const makeFolder = (path: string): TFolder =>
+    Object.assign(Object.create(TFolder.prototype) as TFolder, { path });
   const note = makeFile('notes/topic.md');
   const image = makeFile('assets/image.png');
-  const folder = { path: 'notes' };
+  const folder = makeFolder('notes');
   const files = new Map<string, unknown>([
     ['normalized:notes/topic.md', note],
     ['normalized:assets/image.png', image],
@@ -29,6 +36,7 @@ function makeApp() {
   ]);
   const vault = {
     getAllLoadedFiles: vi.fn(() => [folder, note, image]),
+    getFiles: vi.fn(() => [note, image]),
     getMarkdownFiles: vi.fn(() => [note]),
     getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
     cachedRead: vi.fn(async () => '# Topic'),
@@ -55,12 +63,13 @@ function makeApp() {
 describe('ObsidianVaultGateway', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lists loaded and markdown file paths', () => {
+  it('lists file, markdown, and folder paths separately', () => {
     const { app } = makeApp();
     const gateway = new ObsidianVaultGateway(app);
 
-    expect(gateway.listPaths()).toEqual(['notes', 'notes/topic.md', 'assets/image.png']);
+    expect(gateway.listPaths()).toEqual(['notes/topic.md', 'assets/image.png']);
     expect(gateway.listMarkdownPaths()).toEqual(['notes/topic.md']);
+    expect(gateway.listFolders()).toEqual(['notes']);
   });
 
   it('reads frontmatter and content through normalized TFile lookups', async () => {

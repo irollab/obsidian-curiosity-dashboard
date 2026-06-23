@@ -78,4 +78,18 @@ describe('CuriosityDashboardPlugin settings lifecycle', () => {
 
     expect(saveData).toHaveBeenCalledWith(plugin.settings);
   });
+
+  it('falls back field by field when persisted settings are malformed', async () => {
+    const plugin = makePlugin();
+    vi.spyOn(plugin, 'loadData').mockResolvedValue({
+      topicDir: 42,
+      openOnStartup: 'yes',
+      defaultTab: 'invalid',
+      enableMobileView: false,
+    });
+
+    await plugin.onload();
+
+    expect(plugin.settings).toEqual({ ...DEFAULT_SETTINGS, enableMobileView: false });
+  });
 });

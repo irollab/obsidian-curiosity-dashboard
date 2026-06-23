@@ -1,4 +1,4 @@
-import { type App, TFile, normalizePath } from 'obsidian';
+import { type App, TFile, TFolder, normalizePath } from 'obsidian';
 
 import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 
@@ -6,11 +6,18 @@ export class ObsidianVaultGateway implements VaultGateway {
   constructor(private readonly app: App) {}
 
   listPaths(): string[] {
-    return this.app.vault.getAllLoadedFiles().map((file) => file.path);
+    return this.app.vault.getFiles().map((file) => file.path);
   }
 
   listMarkdownPaths(): string[] {
     return this.app.vault.getMarkdownFiles().map((file) => file.path);
+  }
+
+  listFolders(): string[] {
+    return this.app.vault
+      .getAllLoadedFiles()
+      .filter((file): file is TFolder => file instanceof TFolder)
+      .map((folder) => folder.path);
   }
 
   getFrontmatter(path: string): Frontmatter | null {

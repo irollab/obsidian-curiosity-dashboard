@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from 'obsidian';
 
 import type CuriosityDashboardPlugin from '../src/main';
-import { DashboardSettingTab, DEFAULT_SETTINGS } from '../src/settings';
+import { DashboardSettingTab, DEFAULT_SETTINGS, parseSettings } from '../src/settings';
 
 type ChangeHandler = (value: string | boolean) => Promise<void>;
 
@@ -112,6 +112,64 @@ describe('dashboard settings', () => {
       defaultTab: 'overview',
       enableMobileView: true,
     });
+  });
+
+  it('accepts valid runtime settings', () => {
+    const settings = {
+      topicDir: 'topics',
+      scriptDir: 'scripts',
+      assetDir: 'assets',
+      reviewDir: 'reviews',
+      topicTemplate: 'templates/topic.md',
+      scriptTemplate: 'templates/script.md',
+      reviewTemplate: 'templates/review.md',
+      backgroundPath: '',
+      openOnStartup: true,
+      defaultTab: 'data',
+      enableMobileView: false,
+    } as const;
+
+    expect(parseSettings(settings)).toEqual(settings);
+  });
+
+  it('falls back per field for missing and invalid runtime values', () => {
+    expect(parseSettings({ topicDir: 'custom-topics' })).toEqual({
+      ...DEFAULT_SETTINGS,
+      topicDir: 'custom-topics',
+    });
+    expect(
+      parseSettings({
+        topicDir: 1,
+        scriptDir: null,
+        assetDir: [],
+        reviewDir: {},
+        topicTemplate: false,
+        scriptTemplate: 2,
+        reviewTemplate: null,
+        backgroundPath: 3,
+        openOnStartup: 'true',
+        defaultTab: 'invalid',
+        enableMobileView: 0,
+      }),
+    ).toEqual(DEFAULT_SETTINGS);
+    expect(
+      parseSettings({
+        topicDir: '',
+        scriptDir: ' ',
+        assetDir: '',
+        reviewDir: '',
+        topicTemplate: '',
+        scriptTemplate: '',
+        reviewTemplate: '',
+        backgroundPath: '',
+      }),
+    ).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('uses defaults for non-object persisted data', () => {
+    expect(parseSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings('invalid')).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings([])).toEqual(DEFAULT_SETTINGS);
   });
 
   it('displays every setting with current values', () => {
