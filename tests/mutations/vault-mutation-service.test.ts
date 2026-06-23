@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { VaultMutationService } from '@/mutations/vault-mutation-service';
+import type { ChecklistTask } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
 import { FakeVaultGateway } from '../support/fake-vault-gateway';
 
@@ -8,34 +9,61 @@ const TOPIC_PATH = 'topics/topic.md';
 
 async function topicVault(stage: Stage = '选题'): Promise<FakeVaultGateway> {
   const vault = new FakeVaultGateway();
-  await vault.create(TOPIC_PATH, '- [ ] first\n- [ ] second');
+  await vault.create(TOPIC_PATH, '## 本期执行清单\n- [ ] first\n- [ ] second');
   vault.metadata.set(TOPIC_PATH, { stage });
   return vault;
 }
 
 describe('VaultMutationService.toggleTask', () => {
-  it('toggles only the requested line', async () => {
-    const vault = await topicVault();
+  const secondTask: ChecklistTask = { line: 3, text: 'second', checked: false };
 
-    await new VaultMutationService(vault).toggleTask(TOPIC_PATH, 2);
-
-    expect(await vault.read(TOPIC_PATH)).toBe('- [ ] first\n- [x] second');
-  });
-
-  it('uses process so the toggle is based on the latest content', async () => {
-    class ConcurrentVault extends FakeVaultGateway {
-      override async process(path: string, transform: (content: string) => string): Promise<void> {
-        this.files.set(path, 'new heading\n- [ ] latest');
-        await super.process(path, transform);
-      }
+  class ConcurrentVault extends FakeVaultGateway {
+    constructor(private readonly latestContent: string) {
+      super();
     }
 
-    const vault = new ConcurrentVault();
-    await vault.create(TOPIC_PATH, 'old heading\n- [ ] stale');
+    override async process(path: string, transform: (content: string) => string): Promise<void> {
+      this.files.set(path, this.latestContent);
+      await super.process(path, transform);
+    }
+  }
 
-    await new VaultMutationService(vault).toggleTask(TOPIC_PATH, 2);
+  it('toggles only the requested task', async () => {
+    const vault = await topicVault();
 
-    expect(await vault.read(TOPIC_PATH)).toBe('new heading\n- [x] latest');
+    await new VaultMutationService(vault).toggleTask(TOPIC_PATH, secondTask);
+
+    expect(await vault.read(TOPIC_PATH)).toBe('## 本期执行清单\n- [ ] first\n- [x] second');
+  });
+
+  it('toggles when the latest section still contains the identical task', async () => {
+    const latest = '## 本期执行清单\n- [ ] latest\nnew note';
+    const vault = new ConcurrentVault(latest);
+    await vault.create(TOPIC_PATH, '## 本期执行清单\n- [ ] latest\nold note');
+
+    await new VaultMutationService(vault).toggleTask(TOPIC_PATH, {
+      line: 2,
+      text: 'latest',
+      checked: false,
+    });
+
+    expect(await vault.read(TOPIC_PATH)).toBe('## 本期执行清单\n- [x] latest\nnew note');
+  });
+
+  it.each([
+    ['an inserted task shifts the target', '## 本期执行清单\n- [ ] first\n- [ ] inserted\n- [ ] second'],
+    ['a deleted task shifts the target', '## 本期执行清单\n- [ ] second'],
+    ['the task text is replaced', '## 本期执行清单\n- [ ] first\n- [ ] replacement'],
+    ['the task state has changed', '## 本期执行清单\n- [ ] first\n- [x] second'],
+    ['the task moved outside the section', '## 本期执行清单\n- [ ] first\n## Other\n- [ ] second'],
+  ])('rejects stale task data when %s', async (_case, latest) => {
+    const vault = new ConcurrentVault(latest);
+    await vault.create(TOPIC_PATH, '## 本期执行清单\n- [ ] first\n- [ ] second');
+
+    await expect(
+      new VaultMutationService(vault).toggleTask(TOPIC_PATH, secondTask),
+    ).rejects.toThrow('Task changed; refresh and try again');
+    expect(await vault.read(TOPIC_PATH)).toBe(latest);
   });
 });
 
@@ -63,6 +91,14 @@ describe('VaultMutationService.advanceStage', () => {
 
     await expect(new VaultMutationService(vault).advanceStage(TOPIC_PATH, '复盘')).rejects.toThrow(
       'Review is the terminal stage',
+    );
+  });
+
+  it('reports a stale stage before treating the requested stage as terminal', async () => {
+    const vault = await topicVault('发布');
+
+    await expect(new VaultMutationService(vault).advanceStage(TOPIC_PATH, '复盘')).rejects.toThrow(
+      'Stage changed; refresh and try again',
     );
   });
 });

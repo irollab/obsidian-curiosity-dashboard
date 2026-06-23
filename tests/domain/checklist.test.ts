@@ -46,6 +46,16 @@ describe('parseChecklistSection', () => {
       { line: 2, text: 'indented task', checked: false },
     ]);
   });
+
+  it('rejects tasks without whitespace after the checkbox or without text', () => {
+    const markdown = ['## 本期执行清单', '- [ ]missing space', '- [ ]   ', '- [ ] valid'].join(
+      '\n',
+    );
+
+    expect(parseChecklistSection(markdown)).toEqual([
+      { line: 4, text: 'valid', checked: false },
+    ]);
+  });
 });
 
 describe('toggleChecklistLine', () => {
@@ -66,6 +76,12 @@ describe('toggleChecklistLine', () => {
   it.each([0, 1, 3])('rejects a non-task or out-of-range line %s', (line) => {
     expect(() => toggleChecklistLine('title\n- [ ] task', line)).toThrow(
       `Checklist task not found at line ${line}`,
+    );
+  });
+
+  it.each(['- [ ]missing space', '- [ ]   '])('rejects malformed task syntax: %s', (markdown) => {
+    expect(() => toggleChecklistLine(markdown, 1)).toThrow(
+      'Checklist task not found at line 1',
     );
   });
 });

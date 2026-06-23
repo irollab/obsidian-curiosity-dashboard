@@ -1,6 +1,6 @@
 import type { ChecklistTask } from './models';
 
-const TASK_PATTERN = /^(\s*)- \[([ xX])\](.*)$/;
+const TASK_PATTERN = /^(\s*)- \[([ xX])\](\s+)(.*\S)\s*$/;
 const HEADING_PATTERN = /^#{1,6}(?:[ \t]+|$)/;
 
 export function parseChecklistSection(
@@ -21,7 +21,7 @@ export function parseChecklistSection(
     if (match === null) continue;
     tasks.push({
       line: index + 1,
-      text: (match[3] ?? '').trim(),
+      text: (match[4] ?? '').trim(),
       checked: match[2] !== ' ',
     });
   }
@@ -39,6 +39,6 @@ export function toggleChecklistLine(markdown: string, oneBasedLine: number): str
   }
 
   const replacement = match[2] === ' ' ? 'x' : ' ';
-  parts[index] = `${match[1]}- [${replacement}]${match[3]}`;
+  parts[index] = line.replace(/- \[[ xX]\]/, `- [${replacement}]`);
   return parts.join('');
 }

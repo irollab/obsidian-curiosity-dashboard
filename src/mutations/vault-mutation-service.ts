@@ -1,4 +1,5 @@
-import { toggleChecklistLine } from '@/domain/checklist';
+import { parseChecklistSection, toggleChecklistLine } from '@/domain/checklist';
+import type { ChecklistTask } from '@/domain/models';
 import { nextStage, type Stage } from '@/domain/stages';
 import type { VaultGateway } from '@/ports/vault-gateway';
 
@@ -7,20 +8,27 @@ export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
 export class VaultMutationService {
   constructor(private readonly vault: VaultGateway) {}
 
-  async toggleTask(path: string, line: number): Promise<void> {
-    await this.vault.process(path, (content) => toggleChecklistLine(content, line));
+  async toggleTask(path: string, task: ChecklistTask): Promise<void> {
+    await this.vault.process(path, (content) => {
+      const latest = parseChecklistSection(content).find((candidate) => candidate.line === task.line);
+      if (latest?.text !== task.text || latest.checked !== task.checked) {
+        throw new Error('Task changed; refresh and try again');
+      }
+      return toggleChecklistLine(content, task.line);
+    });
   }
 
   async advanceStage(path: string, current: Stage): Promise<Stage> {
     const next = nextStage(current);
-    if (next === null) throw new Error('Review is the terminal stage');
 
     await this.vault.updateFrontmatter(path, (frontmatter) => {
       if (frontmatter.stage !== current) {
         throw new Error('Stage changed; refresh and try again');
       }
+      if (next === null) throw new Error('Review is the terminal stage');
       frontmatter.stage = next;
     });
+    if (next === null) throw new Error('Review is the terminal stage');
     return next;
   }
 
