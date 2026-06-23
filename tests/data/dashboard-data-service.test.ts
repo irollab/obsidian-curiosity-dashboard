@@ -222,7 +222,7 @@ describe('DashboardDataService', () => {
       issue: 39,
       stage: '制作',
       homepage_focus: true,
-      review_path: 'archive/explicit.md',
+      review_path: ' archive/explicit.md ',
     });
     addReview(vault, 'archive/explicit.md', '200', '2026-06-23');
     addReview(vault, '60-发布复盘/fallback.md', '100', '2026-06-20');
@@ -238,9 +238,54 @@ describe('DashboardDataService', () => {
 
     const model = await service(vault).load(false);
 
+    expect(model.focus.kind).toBe('ready');
+    if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+    expect(model.focus.topic.reviewPath).toBe('archive/explicit.md');
     expect(model.reviewPath).toBe('60-发布复盘/fallback.md');
     expect(model.metrics[0]?.views).toBe('100');
   });
+
+  it.each([
+    {
+      field: 'script_path',
+      rawPath: ' \\40-脚本大纲\\39.md\\ ',
+      normalizedPath: '40-脚本大纲/39.md',
+      kind: 'file',
+    },
+    {
+      field: 'asset_path',
+      rawPath: ' /20-素材库\\39素材/ ',
+      normalizedPath: '20-素材库/39素材',
+      kind: 'folder',
+    },
+  ] as const)(
+    'normalizes and fingerprints an explicit $field path',
+    async ({ field, rawPath, normalizedPath, kind }) => {
+      const vault = new HookVaultGateway();
+      addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+        issue: 39,
+        stage: '制作',
+        homepage_focus: true,
+        [field]: rawPath,
+      });
+      if (kind === 'file') vault.files.set(normalizedPath, '# Explicit');
+      else vault.directories.add(normalizedPath);
+      vault.onRead = (path) => {
+        if (path !== '10-选题池/39-Focus.md') return;
+        if (kind === 'file') vault.files.delete(normalizedPath);
+        else vault.directories.delete(normalizedPath);
+      };
+
+      const model = await service(vault).load(false);
+
+      expect(model.focus.kind).toBe('ready');
+      if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+      expect(field === 'script_path' ? model.focus.topic.scriptPath : model.focus.topic.assetPath).toBe(
+        normalizedPath,
+      );
+      expect(vault.readPaths.filter((path) => path.endsWith('39-Focus.md'))).toHaveLength(2);
+    },
+  );
 
   it('uses one settings snapshot even when the original object changes during an awaited read', async () => {
     const vault = new HookVaultGateway();
@@ -315,9 +360,97 @@ describe('DashboardDataService', () => {
       '10-选题池/39-Focus.md',
       '60-发布复盘/39.md',
     ]);
-    expect(vault.markdownScans).toBe(4);
-    expect(vault.fileScans).toBe(6);
+    expect(vault.markdownScans).toBe(0);
+    expect(vault.fileScans).toBe(2);
     expect(vault.folderScans).toBe(2);
+  });
+
+  it.each([
+    { label: 'empty', scripts: [] },
+    { label: 'ambiguous', scripts: ['40-脚本大纲/39-a.md', '40-脚本大纲/39-b.md'] },
+  ])('bounds underlying path scans for $label associations', async ({ scripts }) => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    for (const path of scripts) vault.files.set(path, '# Script');
+
+    await service(vault).load(false);
+
+    expect(vault.markdownScans).toBe(0);
+    expect(vault.fileScans).toBeLessThanOrEqual(2);
+    expect(vault.folderScans).toBeLessThanOrEqual(2);
+  });
+
+  it('does not retry when an unrelated script changes during an awaited read', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    vault.files.set('40-脚本大纲/39-only.md', '# Only');
+    vault.onRead = (path) => {
+      if (path === '10-选题池/39-Focus.md') {
+        vault.files.set('40-脚本大纲/99-unrelated.md', '# Unrelated');
+      }
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('ready');
+    if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+    expect(model.focus.topic.scriptPath).toBe('40-脚本大纲/39-only.md');
+    expect(vault.readPaths.filter((path) => path.endsWith('39-Focus.md'))).toHaveLength(1);
+  });
+
+  it('ignores script-directory changes when there is no focus', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Idle.md', '# Idle', {
+      issue: 39,
+      stage: '策划',
+      homepage_focus: false,
+    });
+    addReview(vault, '60-发布复盘/latest.md', '100', '2026-06-22');
+    vault.onRead = (path) => {
+      if (path === '60-发布复盘/latest.md') {
+        vault.files.set('40-脚本大纲/39-unrelated.md', '# Unrelated');
+      }
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('none');
+    expect(model.reviewPath).toBe('60-发布复盘/latest.md');
+    expect(vault.readPaths).toEqual(['60-发布复盘/latest.md']);
+  });
+
+  it('retries when a same-issue association candidate changes during an awaited read', async () => {
+    const vault = new HookVaultGateway();
+    addTopic(vault, '10-选题池/39-Focus.md', CHECKLIST, {
+      issue: 39,
+      stage: '制作',
+      homepage_focus: true,
+    });
+    vault.files.set('40-脚本大纲/39-first.md', '# First');
+    vault.onRead = (path) => {
+      if (path === '10-选题池/39-Focus.md') {
+        vault.files.set('40-脚本大纲/39-second.md', '# Second');
+      }
+    };
+
+    const model = await service(vault).load(false);
+
+    expect(model.focus.kind).toBe('ready');
+    if (model.focus.kind !== 'ready') throw new Error('Expected ready focus');
+    expect(model.focus.topic.scriptPath).toBeNull();
+    expect(model.associationCandidates.scriptPath).toEqual([
+      '40-脚本大纲/39-first.md',
+      '40-脚本大纲/39-second.md',
+    ]);
+    expect(vault.readPaths.filter((path) => path.endsWith('39-Focus.md'))).toHaveLength(2);
   });
 
   it('does not hide a stable non-transient read error', async () => {

@@ -1,6 +1,6 @@
 import { parseChecklistSection } from '@/domain/checklist';
 import type { DashboardModel, FocusState, TopicRecord } from '@/domain/models';
-import type { VaultGateway } from '@/ports/vault-gateway';
+import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 import type { DashboardSettings } from '@/settings';
 
 import { AssociationResolver } from './association-resolver';
@@ -17,13 +17,17 @@ export class DashboardDataService {
   async load(mobileReadOnly: boolean): Promise<DashboardModel> {
     const settings = { ...this.settings };
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const before = selectionFingerprint(this.vault, settings);
+      const startPaths = capturePaths(this.vault);
+      const snapshotVault = new PathSnapshotVaultGateway(this.vault, startPaths);
+      const before = selectionFingerprint(snapshotVault, settings, startPaths);
       try {
-        const model = await this.loadOnce(mobileReadOnly, settings);
-        const after = selectionFingerprint(this.vault, settings);
+        const model = await this.loadOnce(snapshotVault, mobileReadOnly, settings);
+        const endPaths = capturePaths(this.vault);
+        const after = selectionFingerprint(this.vault, settings, endPaths);
         if (before === after) return model;
       } catch (error) {
-        const after = selectionFingerprint(this.vault, settings);
+        const endPaths = capturePaths(this.vault);
+        const after = selectionFingerprint(this.vault, settings, endPaths);
         if (before === after) throw error;
       }
     }
@@ -31,14 +35,15 @@ export class DashboardDataService {
   }
 
   private async loadOnce(
+    vault: VaultGateway,
     mobileReadOnly: boolean,
     settings: DashboardSettings,
   ): Promise<DashboardModel> {
     // These services intentionally live for one load. Repository snapshots are shared by all
     // projections in this model, while a later refresh observes the latest Vault state.
-    const topics = new TopicRepository(this.vault, settings.topicDir);
-    const resolver = new AssociationResolver(this.vault, settings);
-    const reviewService = new ReviewMetricsService(this.vault, settings.reviewDir);
+    const topics = new TopicRepository(vault, settings.topicDir);
+    const resolver = new AssociationResolver(vault, settings);
+    const reviewService = new ReviewMetricsService(vault, settings.reviewDir);
 
     const focus = resolveAssociations(resolveFocus(topics.all()), resolver);
     const focusTopic = topicFromFocus(focus);
@@ -62,10 +67,10 @@ export class DashboardDataService {
     const tasks =
       focusTopic === null
         ? []
-        : parseChecklistSection(await this.vault.read(focusTopic.path));
+        : parseChecklistSection(await vault.read(focusTopic.path));
     const review = await reviewService.load(focusTopic?.reviewPath ?? null);
     const backgroundUrl =
-      settings.backgroundPath.length === 0 ? null : this.vault.resourceUrl(settings.backgroundPath);
+      settings.backgroundPath.length === 0 ? null : vault.resourceUrl(settings.backgroundPath);
 
     return {
       focus,
@@ -106,34 +111,57 @@ const TOPIC_FINGERPRINT_FIELDS = [
 const REVIEW_FINGERPRINT_FIELDS = ['type', 'created', 'publish_date'] as const;
 const EXPLICIT_PATH_FIELDS = ['script_path', 'asset_path', 'review_path'] as const;
 
-function selectionFingerprint(vault: VaultGateway, settings: DashboardSettings): string {
-  const markdownPaths = normalizedSet(vault.listMarkdownPaths());
-  const filePaths = normalizedSet(vault.listPaths());
-  const folderPaths = normalizedSet(vault.listFolders());
+interface PathSnapshot {
+  files: ReadonlySet<string>;
+  markdown: ReadonlySet<string>;
+  folders: ReadonlySet<string>;
+}
+
+function capturePaths(vault: VaultGateway): PathSnapshot {
+  const files = normalizedSet(vault.listPaths());
+  return {
+    files,
+    markdown: new Set([...files].filter((path) => path.endsWith('.md'))),
+    folders: normalizedSet(vault.listFolders()),
+  };
+}
+
+function selectionFingerprint(
+  vault: VaultGateway,
+  settings: DashboardSettings,
+  paths: PathSnapshot,
+): string {
+  const markdownPaths = paths.markdown;
+  const filePaths = paths.files;
+  const folderPaths = paths.folders;
   const topicPaths = [...markdownPaths].filter((path) => isInside(path, settings.topicDir)).sort();
   const reviewDirectoryPaths = [...markdownPaths]
     .filter((path) => isInside(path, settings.reviewDir))
     .sort();
-  const topicSnapshots = topicPaths.map(
-    (path): [string, Record<string, unknown> | null] => [path, safeFrontmatter(vault, path)],
-  );
+  const topicSnapshots = topicPaths
+    .map((path): [string, Record<string, unknown> | null] => [path, safeFrontmatter(vault, path)])
+    .filter(([path, frontmatter]) =>
+      frontmatter?.type === '选题' && topicIssue(path, frontmatter) !== null,
+    );
   const topicEntries: Array<[string, Record<string, unknown> | null]> = [];
   const explicitPaths = new Set<string>();
+  const focusedTopics = topicSnapshots.filter(([, frontmatter]) =>
+    isFocusedTopic(frontmatter),
+  );
+  const focusedTopic = focusedTopics.length === 1 ? focusedTopics[0] : undefined;
+  const focusIssue = focusedTopic === undefined ? null : topicIssue(focusedTopic[0], focusedTopic[1]);
 
   for (const [path, frontmatter] of topicSnapshots) {
     topicEntries.push([path, pickFields(frontmatter, TOPIC_FINGERPRINT_FIELDS)]);
+    if (focusedTopic?.[0] !== path) continue;
     for (const field of EXPLICIT_PATH_FIELDS) {
-      const explicit = frontmatter?.[field];
-      if (typeof explicit === 'string' && explicit.trim().length > 0) {
-        explicitPaths.add(normalizePath(explicit));
-      }
+      const explicit = frontmatterPath(frontmatter?.[field]);
+      if (explicit !== null) explicitPaths.add(explicit);
     }
   }
 
-  const explicitReviewPaths = topicSnapshots
-    .map(([, frontmatter]) => frontmatter?.review_path)
-    .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
-    .map(normalizePath);
+  const explicitReviewPath = frontmatterPath(focusedTopic?.[1]?.review_path);
+  const explicitReviewPaths = explicitReviewPath === null ? [] : [explicitReviewPath];
   const reviewPaths = [...new Set([...reviewDirectoryPaths, ...explicitReviewPaths])].sort();
   const reviewEntries = reviewPaths.map((path) => [
     path,
@@ -156,18 +184,66 @@ function selectionFingerprint(vault: VaultGateway, settings: DashboardSettings):
     topicEntries,
     reviewEntries,
     explicitStatuses,
-    scriptCandidates: [...markdownPaths]
-      .filter((path) => isInside(path, settings.scriptDir))
-      .sort(),
-    assetCandidates: [...filePaths, ...folderPaths]
-      .filter((path) => isInside(path, settings.assetDir))
-      .sort(),
+    scriptCandidates: matchingIssuePaths(markdownPaths, settings.scriptDir, focusIssue),
+    assetCandidates: matchingIssuePaths(
+      new Set([...filePaths, ...folderPaths]),
+      settings.assetDir,
+      focusIssue,
+    ),
     reviewCandidates: reviewDirectoryPaths,
     background: {
       path: settings.backgroundPath,
       file: filePaths.has(normalizePath(settings.backgroundPath)),
     },
   });
+}
+
+class PathSnapshotVaultGateway implements VaultGateway {
+  constructor(
+    private readonly source: VaultGateway,
+    private readonly paths: PathSnapshot,
+  ) {}
+
+  listPaths(): string[] {
+    return [...this.paths.files];
+  }
+
+  listMarkdownPaths(): string[] {
+    return [...this.paths.markdown];
+  }
+
+  listFolders(): string[] {
+    return [...this.paths.folders];
+  }
+
+  getFrontmatter(path: string): Frontmatter | null {
+    return this.source.getFrontmatter(path);
+  }
+
+  read(path: string): Promise<string> {
+    return this.source.read(path);
+  }
+
+  process(path: string, transform: (content: string) => string): Promise<void> {
+    return this.source.process(path, transform);
+  }
+
+  updateFrontmatter(path: string, mutate: (frontmatter: Frontmatter) => void): Promise<void> {
+    return this.source.updateFrontmatter(path, mutate);
+  }
+
+  create(path: string, content: string): Promise<void> {
+    return this.source.create(path, content);
+  }
+
+  exists(path: string): boolean {
+    const normalized = normalizePath(path);
+    return this.paths.files.has(normalized) || this.paths.folders.has(normalized);
+  }
+
+  resourceUrl(path: string): string | null {
+    return this.source.resourceUrl(path);
+  }
 }
 
 function normalizedSet(paths: string[]): Set<string> {
@@ -178,9 +254,45 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
 
+function frontmatterPath(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? normalizePath(value.trim())
+    : null;
+}
+
 function isInside(path: string, directory: string): boolean {
   const normalizedDirectory = normalizePath(directory);
   return normalizedDirectory.length === 0 || path.startsWith(`${normalizedDirectory}/`);
+}
+
+function isFocusedTopic(frontmatter: Frontmatter | null): boolean {
+  return frontmatter?.type === '选题' && frontmatter.homepage_focus === true;
+}
+
+function topicIssue(path: string, frontmatter: Frontmatter | null): number | null {
+  if (
+    typeof frontmatter?.issue === 'number' &&
+    Number.isSafeInteger(frontmatter.issue) &&
+    frontmatter.issue > 0
+  ) {
+    return frontmatter.issue;
+  }
+  const basename = path.split('/').at(-1)?.replace(/\.md$/i, '') ?? '';
+  const issue = Number.parseInt(basename.match(/^(\d+)/)?.[1] ?? '', 10);
+  return Number.isSafeInteger(issue) && issue > 0 ? issue : null;
+}
+
+function matchingIssuePaths(
+  paths: ReadonlySet<string>,
+  directory: string,
+  issue: number | null,
+): string[] {
+  if (issue === null) return [];
+  const issuePattern = new RegExp(`^(?:第)?0*${issue}(?:期|-|_|$)`);
+  return [...paths]
+    .filter((path) => isInside(path, directory))
+    .filter((path) => issuePattern.test((path.split('/').at(-1) ?? '').replace(/\.[^.]+$/, '')))
+    .sort();
 }
 
 function safeFrontmatter(vault: VaultGateway, path: string): Record<string, unknown> | null {
