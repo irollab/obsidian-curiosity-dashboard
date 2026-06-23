@@ -19,9 +19,9 @@ export interface DashboardHandlers {
   openSettings(): void;
   selectTab(tab: DashboardTab): Promise<void>;
   setAssociation(topicPath: string, field: AssociationField, value: string): Promise<void>;
-  createTopic?(): void;
-  createScript?(topic: TopicRecord): void;
-  createReview?(topic: TopicRecord): void;
+  createTopic(): Promise<void>;
+  createScript(topic: TopicRecord): Promise<void>;
+  createReview(topic: TopicRecord): Promise<void>;
 }
 
 const TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [

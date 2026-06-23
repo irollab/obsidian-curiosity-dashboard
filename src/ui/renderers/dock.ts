@@ -3,9 +3,10 @@ import { setIcon } from 'obsidian';
 import type { DashboardModel, TopicRecord } from '@/domain/models';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
+import { bindGuardedAction } from '../guarded-action';
 
 interface DockItem {
-  action?: () => void;
+  action?: () => void | Promise<void>;
   icon: string;
   label: string;
   reason?: string;
@@ -23,11 +24,9 @@ export function renderDock(
   const topic = focusTopic(model);
   const items: DockItem[] = [];
 
-  if (handlers.createTopic !== undefined) {
-    items.push(model.mobileReadOnly
-      ? disabledItem('Ideas', 'lightbulb', '移动端只读，不能创建选题卡')
-      : { action: handlers.createTopic, icon: 'lightbulb', label: 'Ideas' });
-  }
+  items.push(model.mobileReadOnly
+    ? disabledItem('Ideas', 'lightbulb', '移动端只读，不能创建选题卡')
+    : { action: handlers.createTopic, icon: 'lightbulb', label: 'Ideas' });
   items.push(fileItem('Mission', 'crosshair', topic?.path ?? null, '未设置当前作品', handlers));
   items.push({ action: () => void handlers.selectTab('tasks'), icon: 'list-checks', label: 'Tasks' });
   items.push(associatedItem('Script', 'file-text', topic, 'scriptPath', model, handlers));
@@ -68,7 +67,7 @@ function associatedItem(
   if (path !== null) return fileItem(label, icon, path, '', handlers);
 
   const create = label === 'Script' ? handlers.createScript : handlers.createReview;
-  if (topic !== null && create !== undefined) {
+  if (topic !== null) {
     if (model.mobileReadOnly) {
       return disabledItem(label, icon, `移动端只读，不能创建${label === 'Script' ? '脚本' : '复盘'}`);
     }
@@ -98,6 +97,6 @@ function renderDockItem(parent: HTMLElement, item: DockItem): void {
   if (disabled && item.reason !== undefined) {
     button.createSpan({ cls: 'curiosity-dock-reason', text: item.reason });
   } else if (item.action !== undefined) {
-    button.addEventListener('click', item.action);
+    bindGuardedAction(button, item.action);
   }
 }

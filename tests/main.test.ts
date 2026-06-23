@@ -54,6 +54,7 @@ vi.mock('obsidian', () => {
 
   return {
     ItemView: MockItemView,
+    Modal: class {},
     Notice: MockNotice,
     Platform: { isMobile: false },
     Plugin: MockPlugin,

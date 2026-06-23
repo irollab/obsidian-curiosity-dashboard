@@ -6,6 +6,19 @@ import type { DashboardModel } from '@/domain/models';
 import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { DEFAULT_SETTINGS } from '@/settings';
 
+const modalMock = vi.hoisted(() => ({
+  confirmAsk: vi.fn<(app: unknown, stage: unknown) => Promise<boolean>>(async () => false),
+  createAsk: vi.fn<(app: unknown, defaults: unknown) => Promise<unknown>>(async () => null),
+}));
+
+vi.mock('@/ui/confirm-stage-modal', () => ({
+  ConfirmStageModal: { ask: modalMock.confirmAsk },
+}));
+
+vi.mock('@/ui/create-file-modal', () => ({
+  CreateFileModal: { ask: modalMock.createAsk },
+}));
+
 const obsidianMock = vi.hoisted(() => {
   let activeElement: FakeElement | null = null;
 
@@ -175,6 +188,7 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     toggleTask: vi.fn(async () => undefined),
   };
   const saveSettings = vi.fn<() => Promise<void>>(async () => undefined);
+  const templateCreate = vi.fn<(request: unknown) => Promise<void>>(async () => undefined);
   const openLinkText = vi.fn(async () => undefined);
   const setting = { open: vi.fn(), openTabById: vi.fn() };
   const plugin = {
@@ -183,12 +197,13 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     mutationService: () => mutation,
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
+    templateService: () => ({ create: templateCreate }),
   };
   const view = new CuriosityDashboardView(
     { app: { setting, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
     plugin as never,
   ) as CuriosityDashboardView & { contentEl: InstanceType<typeof obsidianMock.FakeElement> };
-  return { mutation, openLinkText, plugin, saveSettings, setting, view };
+  return { mutation, openLinkText, plugin, saveSettings, setting, templateCreate, view };
 }
 
 function makeView(load: () => Promise<DashboardModel>, enableMobileView = true) {
@@ -213,6 +228,8 @@ describe('CuriosityDashboardView', () => {
     obsidianMock.notices.length = 0;
     obsidianMock.resetFocus();
     vi.unstubAllGlobals();
+    modalMock.confirmAsk.mockReset().mockResolvedValue(false);
+    modalMock.createAsk.mockReset().mockResolvedValue(null);
   });
 
   it('renders loading before replacing it with the loaded shell', async () => {
@@ -386,7 +403,7 @@ describe('CuriosityDashboardView', () => {
     ));
   });
 
-  it('requires confirmation before advancing and surfaces file-open failures', async () => {
+  it('uses the native confirmation modal before advancing and surfaces file-open failures', async () => {
     const readyModel: DashboardModel = {
       ...model,
       focus: {
@@ -401,16 +418,285 @@ describe('CuriosityDashboardView', () => {
     };
     const harness = makeHarness(async () => readyModel);
     harness.openLinkText.mockRejectedValueOnce(new Error('cannot open'));
-    vi.stubGlobal('window', { confirm: vi.fn(() => true) });
+    modalMock.confirmAsk.mockResolvedValueOnce(true);
     await harness.view.refresh();
 
     findByText(harness.view.contentEl, '查看选题卡')?.click();
     await vi.waitFor(() => expect(obsidianMock.notices).toContain('无法打开文件：cannot open'));
     findByText(harness.view.contentEl, '推进阶段')?.click();
+    await vi.waitFor(() => expect(modalMock.confirmAsk).toHaveBeenCalledWith(
+      expect.anything(),
+      '制作',
+    ));
     await vi.waitFor(() => expect(harness.mutation.advanceStage).toHaveBeenCalledWith(
       '10-选题池/39.md',
       '制作',
     ));
+  });
+
+  it('derives the next topic issue from the largest topic visible in the loaded model', async () => {
+    const topic = {
+      path: '10-选题池/42.md', basename: '42', title: 'Queue', issue: 42,
+      status: '已立项', stage: '策划' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: false, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const value: DashboardModel = {
+      ...model,
+      queue: [topic],
+      thisWeek: [{ ...topic, issue: 44, path: '10-选题池/44.md' }],
+    };
+    const harness = makeHarness(async () => value);
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
+    const defaults = modalMock.createAsk.mock.calls[0]?.[1] as {
+      issue: number; targetPath: string; targetPathFor(issue: number, title: string): string;
+      templatePath: string; title: string;
+    };
+    expect(defaults).toMatchObject({
+      issue: 45,
+      targetPath: '10-选题池/45-新选题.md',
+      templatePath: DEFAULT_SETTINGS.topicTemplate,
+      title: '新选题',
+    });
+    expect(defaults.targetPathFor(46, 'A:B')).toBe('10-选题池/46-A-B.md');
+  });
+
+  it.each(['ready', 'invalid-stage'] as const)(
+    'creates and associates script/review for a %s focus topic, then opens and refreshes',
+    async (kind) => {
+      const topic = {
+        path: '10-选题池/39.md', basename: '39', title: '首页:A', issue: 39,
+        status: '已立项', stage: kind === 'ready' ? '制作' as const : null,
+        priority: null, dueDate: null, nextAction: null, homepageFocus: true,
+        scriptPath: null, assetPath: null, reviewPath: null,
+      };
+      const value: DashboardModel = {
+        ...model,
+        focus: kind === 'ready'
+          ? { kind, topic: { ...topic, stage: '制作' } }
+          : { kind, topic: { ...topic, stage: null } },
+      };
+      const load = vi.fn(async () => value);
+      const harness = makeHarness(load);
+      const scriptRequest = {
+        issue: 39,
+        targetPath: '40-脚本大纲/39-首页-A成稿.md',
+        templatePath: DEFAULT_SETTINGS.scriptTemplate,
+        title: '首页:A',
+      };
+      const reviewRequest = {
+        issue: 39,
+        targetPath: '60-发布复盘/第39期-首页-A-综合复盘.md',
+        templatePath: DEFAULT_SETTINGS.reviewTemplate,
+        title: '首页:A',
+      };
+      modalMock.createAsk
+        .mockResolvedValueOnce(scriptRequest)
+        .mockResolvedValueOnce(reviewRequest);
+      await harness.view.refresh();
+
+      findByText(harness.view.contentEl, 'Script')?.parent?.click();
+      await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(1));
+      expect(modalMock.createAsk.mock.calls[0]?.[1]).toMatchObject({
+        issue: 39,
+        targetPath: '40-脚本大纲/39-首页-A成稿.md',
+        title: '首页:A',
+      });
+      await vi.waitFor(() => expect(harness.templateCreate).toHaveBeenCalledWith(scriptRequest));
+      await vi.waitFor(() => expect(harness.mutation.setAssociationPath).toHaveBeenCalledWith(
+        topic.path,
+        'script_path',
+        scriptRequest.targetPath,
+      ));
+      await vi.waitFor(() => expect(harness.openLinkText).toHaveBeenCalledWith(
+        scriptRequest.targetPath,
+        '',
+        false,
+      ));
+
+      await vi.waitFor(() => expect(findByText(harness.view.contentEl, 'Review')).toBeDefined());
+      findByText(harness.view.contentEl, 'Review')?.parent?.click();
+      await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(2));
+      expect(modalMock.createAsk.mock.calls[1]?.[1]).toMatchObject({
+        issue: 39,
+        targetPath: '60-发布复盘/第39期-首页-A-综合复盘.md',
+        title: '首页:A',
+      });
+      await vi.waitFor(() => expect(harness.templateCreate).toHaveBeenCalledWith(reviewRequest));
+      await vi.waitFor(() => expect(harness.mutation.setAssociationPath).toHaveBeenCalledWith(
+        topic.path,
+        'review_path',
+        reviewRequest.targetPath,
+      ));
+      await vi.waitFor(() => expect(load.mock.calls.length).toBeGreaterThanOrEqual(3));
+      expect(obsidianMock.notices).toEqual([]);
+    },
+  );
+
+  it('distinguishes create, association, open, and refresh failures after creation', async () => {
+    const topic = {
+      path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const value: DashboardModel = { ...model, focus: { kind: 'ready', topic } };
+    const request = {
+      issue: 39, targetPath: '40-脚本大纲/39-首页成稿.md',
+      templatePath: DEFAULT_SETTINGS.scriptTemplate, title: '首页',
+    };
+
+    const createFailure = makeHarness(async () => value);
+    modalMock.createAsk.mockResolvedValueOnce(request);
+    createFailure.templateCreate.mockRejectedValueOnce(new Error('target exists'));
+    await createFailure.view.refresh();
+    findByText(createFailure.view.contentEl, 'Script')?.parent?.click();
+    await vi.waitFor(() => expect(obsidianMock.notices).toContain('创建失败：target exists'));
+    expect(createFailure.mutation.setAssociationPath).not.toHaveBeenCalled();
+    expect(createFailure.openLinkText).not.toHaveBeenCalled();
+
+    obsidianMock.notices.length = 0;
+    const partial = makeHarness(async () => value);
+    modalMock.createAsk.mockResolvedValueOnce(request);
+    partial.mutation.setAssociationPath.mockRejectedValueOnce(new Error('concurrent association'));
+    partial.openLinkText.mockRejectedValueOnce(new Error('open failed'));
+    await partial.view.refresh();
+    findByText(partial.view.contentEl, 'Script')?.parent?.click();
+    await vi.waitFor(() => expect(obsidianMock.notices.some((message) =>
+      message.includes('文件已创建，但关联失败') && message.includes('无法打开'))).toBe(true));
+  });
+
+  it('does not write on modal cancellation and runs only one creation for a double click', async () => {
+    const topic = {
+      path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const harness = makeHarness(async () => ({
+      ...model,
+      focus: { kind: 'ready', topic },
+    }));
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
+    expect(harness.templateCreate).not.toHaveBeenCalled();
+
+    modalMock.createAsk.mockClear().mockResolvedValueOnce({
+      issue: 39,
+      targetPath: '60-发布复盘/第39期-首页-综合复盘.md',
+      templatePath: DEFAULT_SETTINGS.reviewTemplate,
+      title: '首页',
+    });
+    let finishCreate!: () => void;
+    harness.templateCreate.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finishCreate = resolve;
+    }));
+    const review = findByText(harness.view.contentEl, 'Review')?.parent;
+    review?.click();
+    review?.click();
+    await vi.waitFor(() => expect(harness.templateCreate).toHaveBeenCalledOnce());
+    expect(modalMock.createAsk).toHaveBeenCalledOnce();
+    expect(review?.disabled).toBe(true);
+    finishCreate();
+    await vi.waitFor(() => expect(harness.mutation.setAssociationPath).toHaveBeenCalledOnce());
+  });
+
+  it('reports refresh failure as partial success without undoing creation', async () => {
+    const topic = {
+      path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const harness = makeHarness(async () => ({
+      ...model,
+      focus: { kind: 'ready', topic },
+    }));
+    const request = {
+      issue: 39,
+      targetPath: '40-脚本大纲/39-首页成稿.md',
+      templatePath: DEFAULT_SETTINGS.scriptTemplate,
+      title: '首页',
+    };
+    modalMock.createAsk.mockResolvedValueOnce(request);
+    await harness.view.refresh();
+    vi.spyOn(harness.view, 'refresh').mockRejectedValueOnce(new Error('refresh failed'));
+
+    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+
+    await vi.waitFor(() => expect(obsidianMock.notices).toContain(
+      '文件已创建并关联，但无法刷新 Dashboard：refresh failed',
+    ));
+    expect(harness.templateCreate).toHaveBeenCalledOnce();
+    expect(harness.openLinkText).toHaveBeenCalledOnce();
+  });
+
+  it('defensively rejects creation when the last rendered model is mobile read-only', async () => {
+    const mobileModel = { ...model, mobileReadOnly: true };
+    const harness = makeHarness(async () => mobileModel);
+    await harness.view.refresh();
+
+    await (harness.view as unknown as {
+      openCreate(kind: 'topic', topic: null): Promise<void>;
+    }).openCreate('topic', null);
+
+    expect(modalMock.createAsk).not.toHaveBeenCalled();
+    expect(harness.templateCreate).not.toHaveBeenCalled();
+    expect(obsidianMock.notices).toContain('移动端只读，不能创建文件。');
+  });
+
+  it('rejects script/review creation unless the supplied topic is the current loaded focus', async () => {
+    const staleTopic = {
+      path: '10-选题池/39.md', basename: '39', title: '旧作品', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const harness = makeHarness(async () => model);
+    await harness.view.refresh();
+
+    await (harness.view as unknown as {
+      openCreate(kind: 'script', topic: typeof staleTopic): Promise<void>;
+    }).openCreate('script', staleTopic);
+
+    expect(modalMock.createAsk).not.toHaveBeenCalled();
+    expect(obsidianMock.notices).toContain('当前作品已变化，不能创建关联文件。');
+  });
+
+  it('aborts before writing when the focus changes while the create modal is open', async () => {
+    const oldTopic = {
+      path: '10-选题池/39.md', basename: '39', title: '旧作品', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+      reviewPath: null,
+    };
+    const newTopic = { ...oldTopic, path: '10-选题池/40.md', basename: '40', issue: 40, title: '新作品' };
+    let current: DashboardModel = { ...model, focus: { kind: 'ready', topic: oldTopic } };
+    const harness = makeHarness(async () => current);
+    let confirm!: (request: unknown) => void;
+    modalMock.createAsk.mockImplementationOnce(() => new Promise((resolve) => { confirm = resolve; }));
+    await harness.view.refresh();
+
+    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
+    current = { ...model, focus: { kind: 'ready', topic: newTopic } };
+    await harness.view.refresh();
+    confirm({
+      issue: 39,
+      targetPath: '40-脚本大纲/39-旧作品成稿.md',
+      templatePath: DEFAULT_SETTINGS.scriptTemplate,
+      title: '旧作品',
+    });
+
+    await vi.waitFor(() => expect(obsidianMock.notices).toContain(
+      '当前作品已变化，已取消创建。',
+    ));
+    expect(harness.templateCreate).not.toHaveBeenCalled();
   });
 
   it.each(['open', 'openTabById'] as const)(

@@ -2,6 +2,7 @@ import type { DashboardModel, TopicRecord } from '@/domain/models';
 import { STAGES, stageIndex, type Stage } from '@/domain/stages';
 
 import type { AssociationField, DashboardHandlers } from '../dashboard-renderer';
+import { bindGuardedAction } from '../guarded-action';
 
 export function renderMissionControl(
   parent: HTMLElement,
@@ -216,18 +217,4 @@ function renderQuickLook(
       }
     }
   }
-}
-
-function bindGuardedAction(button: HTMLButtonElement, action: () => Promise<void>): void {
-  button.addEventListener('click', () => {
-    if (button.disabled) return;
-    button.disabled = true;
-    button.setAttr('aria-busy', 'true');
-    const settle = (): void => {
-      if (!button.isConnected) return;
-      button.disabled = false;
-      button.removeAttribute('aria-busy');
-    };
-    void action().then(settle, settle);
-  });
 }

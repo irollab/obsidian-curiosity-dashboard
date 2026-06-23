@@ -1,6 +1,7 @@
 import type { DashboardModel, TopicRecord } from '@/domain/models';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
+import { bindGuardedAction } from '../guarded-action';
 
 export function renderQuickActions(
   parent: HTMLElement,
@@ -12,31 +13,24 @@ export function renderQuickActions(
   });
   section.createEl('h2', { text: 'Quick Actions' });
   const actions = section.createDiv({ cls: 'curiosity-actions' });
-  let hasCreateAction = false;
-
-  if (handlers.createTopic !== undefined) {
-    hasCreateAction = true;
-    createButton(actions, '创建选题卡', model.mobileReadOnly, () => handlers.createTopic?.());
-  }
+  createButton(actions, '创建选题卡', model.mobileReadOnly, handlers.createTopic);
 
   const topic = focusTopic(model);
   if (topic !== null) {
     if (topic.scriptPath !== null) {
       openButton(actions, '打开脚本', topic.scriptPath, handlers);
-    } else if (handlers.createScript !== undefined) {
-      hasCreateAction = true;
-      createButton(actions, '创建脚本', model.mobileReadOnly, () => handlers.createScript?.(topic));
+    } else {
+      createButton(actions, '创建脚本', model.mobileReadOnly, () => handlers.createScript(topic));
     }
 
     if (topic.reviewPath !== null) {
       openButton(actions, '打开复盘', topic.reviewPath, handlers);
-    } else if (handlers.createReview !== undefined) {
-      hasCreateAction = true;
-      createButton(actions, '创建复盘', model.mobileReadOnly, () => handlers.createReview?.(topic));
+    } else {
+      createButton(actions, '创建复盘', model.mobileReadOnly, () => handlers.createReview(topic));
     }
   }
 
-  if (model.mobileReadOnly && hasCreateAction) {
+  if (model.mobileReadOnly) {
     section.createEl('p', {
       cls: 'curiosity-readonly-reason',
       text: '移动端只读：创建操作不可用。',
@@ -55,7 +49,7 @@ function createButton(
   parent: HTMLElement,
   label: string,
   mobileReadOnly: boolean,
-  action: () => void,
+  action: () => Promise<void>,
 ): void {
   const button = parent.createEl('button', {
     cls: 'curiosity-write-action',
@@ -67,7 +61,7 @@ function createButton(
   });
   button.disabled = mobileReadOnly;
   if (mobileReadOnly) button.setAttr('title', '移动端只读，不能创建文件');
-  else button.addEventListener('click', action);
+  else bindGuardedAction(button, action);
 }
 
 function openButton(

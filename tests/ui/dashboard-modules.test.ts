@@ -48,21 +48,18 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
   };
 }
 
-function handlers(includeCreation = true): DashboardHandlers {
-  const base: DashboardHandlers = {
+function handlers(): DashboardHandlers {
+  return {
     confirmAdvance: vi.fn(async () => undefined),
+    createReview: vi.fn(async () => undefined),
+    createScript: vi.fn(async () => undefined),
+    createTopic: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
     openSettings: vi.fn(),
     selectTab: vi.fn(async () => undefined),
     setAssociation: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
   };
-  if (includeCreation) {
-    base.createTopic = vi.fn();
-    base.createScript = vi.fn();
-    base.createReview = vi.fn();
-  }
-  return base;
 }
 
 function render(
@@ -206,12 +203,12 @@ describe('dashboard secondary modules', () => {
     expect(invalid.actions.createReview).toHaveBeenCalledWith(invalidTopic);
   });
 
-  it('does not render unsupported create controls and exposes mobile read-only reasons', () => {
-    const unsupported = render(model(), 'overview', handlers(false));
-    expect(findByText(unsupported.root, '创建选题卡')).toBeUndefined();
-    expect(findByText(unsupported.root, '创建脚本')).toBeUndefined();
-    expect(findByText(unsupported.root, '创建复盘')).toBeUndefined();
-    expect(findByText(unsupported.root, 'Ideas')).toBeUndefined();
+  it('always renders real create controls and exposes mobile read-only reasons', () => {
+    const desktop = render();
+    expect(findByText(desktop.root, '创建选题卡')).toBeDefined();
+    expect(findByText(desktop.root, '创建脚本')).toBeDefined();
+    expect(findByText(desktop.root, '创建复盘')).toBeDefined();
+    expect(findByText(desktop.root, 'Ideas')).toBeDefined();
 
     const mobile = render(model({ mobileReadOnly: true }));
     expect(findByText(mobile.root, '移动端只读：创建操作不可用。')).toBeDefined();
@@ -220,6 +217,40 @@ describe('dashboard secondary modules', () => {
       expect(button?.disabled).toBe(true);
       expect(button?.getAttr('aria-label')).toContain('移动端只读');
     }
+  });
+
+  it('guards Quick Actions and Dock creation buttons while an action is in flight', async () => {
+    let resolveTopic!: () => void;
+    const pendingTopic = new Promise<void>((resolve) => { resolveTopic = resolve; });
+    const quick = render();
+    vi.mocked(quick.actions.createTopic).mockReturnValueOnce(pendingTopic);
+    const quickButton = findByText(quick.root, '创建选题卡');
+
+    quickButton?.click();
+    quickButton?.click();
+    expect(quick.actions.createTopic).toHaveBeenCalledOnce();
+    expect(quickButton?.disabled).toBe(true);
+    expect(quickButton?.getAttr('aria-busy')).toBe('true');
+    resolveTopic();
+    await pendingTopic;
+    await Promise.resolve();
+    expect(quickButton?.disabled).toBe(false);
+    expect(quickButton?.getAttr('aria-busy')).toBeNull();
+
+    let resolveScript!: () => void;
+    const pendingScript = new Promise<void>((resolve) => { resolveScript = resolve; });
+    const dock = render(model(), 'tasks');
+    vi.mocked(dock.actions.createScript).mockReturnValueOnce(pendingScript);
+    const dockButton = findByText(dock.root, 'Script')?.parent;
+    dockButton?.click();
+    dockButton?.click();
+    expect(dock.actions.createScript).toHaveBeenCalledOnce();
+    expect(dockButton?.disabled).toBe(true);
+    expect(dockButton?.getAttr('aria-busy')).toBe('true');
+    resolveScript();
+    await pendingScript;
+    await Promise.resolve();
+    expect(dockButton?.disabled).toBe(false);
   });
 
   it('builds an icon-backed Dock whose enabled items invoke real destinations', () => {
@@ -253,7 +284,7 @@ describe('dashboard secondary modules', () => {
   });
 
   it('disables unavailable Dock destinations with a visible and accessible reason', () => {
-    const actions = handlers(false);
+    const actions = handlers();
     const { root } = render(model({ focus: { kind: 'none' } }), 'overview', actions);
     const dock = findAll(root, (element) => element.classList.has('curiosity-dock'))[0]!;
 

@@ -46,6 +46,9 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
 function handlers(): DashboardHandlers {
   return {
     confirmAdvance: vi.fn(async () => undefined),
+    createReview: vi.fn(async () => undefined),
+    createScript: vi.fn(async () => undefined),
+    createTopic: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
     openSettings: vi.fn(),
     selectTab: vi.fn(async () => undefined),
