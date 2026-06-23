@@ -5,7 +5,7 @@ import { LatestRefresh } from '@/refresh-controller';
 import type { DashboardSettings } from '@/settings';
 
 import type CuriosityDashboardPlugin from './main';
-import { DASHBOARD_VIEW_TYPE } from './main';
+import { DASHBOARD_VIEW_TYPE } from './constants';
 
 type DashboardTab = DashboardSettings['defaultTab'];
 

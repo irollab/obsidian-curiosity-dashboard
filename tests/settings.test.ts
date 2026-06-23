@@ -5,7 +5,7 @@ import type { App } from 'obsidian';
 import type CuriosityDashboardPlugin from '../src/main';
 import { DashboardSettingTab, DEFAULT_SETTINGS, parseSettings } from '../src/settings';
 
-type ChangeHandler = (value: string | boolean) => Promise<void>;
+type ChangeHandler = (value: string | boolean) => unknown;
 
 interface SettingRecord {
   kind: 'dropdown' | 'text' | 'toggle';
@@ -17,6 +17,7 @@ interface SettingRecord {
 
 const obsidianMock = vi.hoisted(() => ({
   headings: [] as string[],
+  notices: [] as string[],
   settings: [] as SettingRecord[],
 }));
 
@@ -79,13 +80,19 @@ vi.mock('obsidian', () => {
     }
   }
 
-  return { PluginSettingTab: MockPluginSettingTab, Setting: MockSetting };
+  class MockNotice {
+    constructor(message: string) {
+      obsidianMock.notices.push(message);
+    }
+  }
+
+  return { Notice: MockNotice, PluginSettingTab: MockPluginSettingTab, Setting: MockSetting };
 });
 
-function makeTab() {
+function makeTab(saveSettings = vi.fn(async () => undefined)) {
   const plugin = {
     settings: { ...DEFAULT_SETTINGS },
-    saveSettings: vi.fn(async () => undefined),
+    saveSettings,
   } as unknown as CuriosityDashboardPlugin;
   const tab = new DashboardSettingTab({} as App, plugin);
   tab.display();
@@ -95,6 +102,7 @@ function makeTab() {
 describe('dashboard settings', () => {
   beforeEach(() => {
     obsidianMock.headings.length = 0;
+    obsidianMock.notices.length = 0;
     obsidianMock.settings.length = 0;
   });
 
@@ -196,11 +204,13 @@ describe('dashboard settings', () => {
     const { plugin } = makeTab();
 
     for (const setting of obsidianMock.settings.slice(0, 8)) {
-      await setting.onChange('  changed  ');
+      expect(setting.onChange('  changed  ')).toBeUndefined();
     }
-    await obsidianMock.settings[8]?.onChange(true);
-    await obsidianMock.settings[9]?.onChange('data');
-    await obsidianMock.settings[10]?.onChange(false);
+    expect(obsidianMock.settings[8]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[9]?.onChange('data')).toBeUndefined();
+    expect(obsidianMock.settings[10]?.onChange(false)).toBeUndefined();
+
+    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(11));
 
     expect(plugin.settings).toEqual({
       topicDir: 'changed',
@@ -216,5 +226,19 @@ describe('dashboard settings', () => {
       enableMobileView: false,
     });
     expect(plugin.saveSettings).toHaveBeenCalledTimes(11);
+  });
+
+  it('contains save failures at every onChange boundary and shows a notice', async () => {
+    const saveSettings = vi.fn(async () => Promise.reject(new Error('disk full')));
+    makeTab(saveSettings);
+
+    for (const setting of obsidianMock.settings) {
+      const value = setting.kind === 'toggle' ? true : setting.kind === 'dropdown' ? 'data' : 'changed';
+      const result = setting.onChange(value);
+      expect(result).toBeUndefined();
+    }
+
+    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(11));
+    expect(obsidianMock.notices.every((message) => message.includes('disk full'))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { type App, PluginSettingTab, Setting } from 'obsidian';
+import { type App, Notice, PluginSettingTab, Setting } from 'obsidian';
 
 import type CuriosityDashboardPlugin from './main';
 
@@ -94,8 +94,8 @@ export class DashboardSettingTab extends PluginSettingTab {
     this.addText('Background image', 'backgroundPath');
 
     new Setting(this.containerEl).setName('Open on startup').addToggle((toggle) =>
-      toggle.setValue(this.plugin.settings.openOnStartup).onChange(async (value) => {
-        await this.updateSetting('openOnStartup', value);
+      toggle.setValue(this.plugin.settings.openOnStartup).onChange((value) => {
+        this.updateSetting('openOnStartup', value);
       }),
     );
 
@@ -103,33 +103,36 @@ export class DashboardSettingTab extends PluginSettingTab {
       dropdown
         .addOptions({ overview: 'Overview', tasks: 'Tasks', data: 'Data' })
         .setValue(this.plugin.settings.defaultTab)
-        .onChange(async (value) => {
-          if (isDefaultTab(value)) await this.updateSetting('defaultTab', value);
+        .onChange((value) => {
+          if (isDefaultTab(value)) this.updateSetting('defaultTab', value);
         }),
     );
 
     new Setting(this.containerEl)
       .setName('Enable simplified mobile view')
       .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableMobileView).onChange(async (value) => {
-          await this.updateSetting('enableMobileView', value);
+        toggle.setValue(this.plugin.settings.enableMobileView).onChange((value) => {
+          this.updateSetting('enableMobileView', value);
         }),
       );
   }
 
   private addText(name: string, key: TextSettingKey): void {
     new Setting(this.containerEl).setName(name).addText((text) =>
-      text.setValue(this.plugin.settings[key]).onChange(async (value) => {
-        await this.updateSetting(key, value.trim());
+      text.setValue(this.plugin.settings[key]).onChange((value) => {
+        this.updateSetting(key, value.trim());
       }),
     );
   }
 
-  private async updateSetting<K extends keyof DashboardSettings>(
+  private updateSetting<K extends keyof DashboardSettings>(
     key: K,
     value: DashboardSettings[K],
-  ): Promise<void> {
+  ): void {
     this.plugin.settings[key] = value;
-    await this.plugin.saveSettings();
+    void this.plugin.saveSettings().catch((error: unknown) => {
+      const detail = error instanceof Error ? error.message : '未知错误';
+      new Notice(`无法保存 Curiosity Dashboard 设置：${detail}`);
+    });
   }
 }
