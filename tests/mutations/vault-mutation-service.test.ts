@@ -99,4 +99,36 @@ describe('VaultMutationService.setAssociationPath', () => {
     ).rejects.toThrow(/explicit edit/i);
     expect(vault.metadata.get(TOPIC_PATH)?.script_path).toBe('scripts/old.md');
   });
+
+  it('allows replacing an empty string association value', async () => {
+    const vault = await topicVault();
+    await vault.create('scripts/new.md', 'new');
+    vault.metadata.set(TOPIC_PATH, { stage: '选题', script_path: '' });
+
+    await new VaultMutationService(vault).setAssociationPath(
+      TOPIC_PATH,
+      'script_path',
+      'scripts/new.md',
+    );
+
+    expect(vault.metadata.get(TOPIC_PATH)?.script_path).toBe('scripts/new.md');
+  });
+
+  it.each([42, ['scripts/old.md'], { path: 'scripts/old.md' }])(
+    'rejects replacing an invalid non-empty association value: %j',
+    async (existing) => {
+      const vault = await topicVault();
+      await vault.create('scripts/new.md', 'new');
+      vault.metadata.set(TOPIC_PATH, { stage: '选题', script_path: existing });
+
+      await expect(
+        new VaultMutationService(vault).setAssociationPath(
+          TOPIC_PATH,
+          'script_path',
+          'scripts/new.md',
+        ),
+      ).rejects.toThrow(/explicit edit/i);
+      expect(vault.metadata.get(TOPIC_PATH)?.script_path).toEqual(existing);
+    },
+  );
 });

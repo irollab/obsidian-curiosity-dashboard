@@ -33,7 +33,7 @@ export class VaultMutationService {
 
     await this.vault.updateFrontmatter(path, (frontmatter) => {
       const existing = frontmatter[field];
-      if (typeof existing === 'string' && existing.length > 0 && existing !== value) {
+      if (existing !== null && existing !== undefined && existing !== '' && existing !== value) {
         throw new Error('Association already set; use an explicit edit to replace it');
       }
       frontmatter[field] = value;

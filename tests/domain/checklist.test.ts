@@ -33,6 +33,19 @@ describe('parseChecklistSection', () => {
       { line: 2, text: 'task', checked: false },
     ]);
   });
+
+  it('supports indented section headings and tasks and stops at an indented heading', () => {
+    const markdown = [
+      '  ## 本期执行清单  ',
+      '    - [ ] indented task',
+      '  ### next section',
+      '    - [ ] excluded task',
+    ].join('\n');
+
+    expect(parseChecklistSection(markdown)).toEqual([
+      { line: 2, text: 'indented task', checked: false },
+    ]);
+  });
 });
 
 describe('toggleChecklistLine', () => {
@@ -41,6 +54,12 @@ describe('toggleChecklistLine', () => {
 
     expect(toggleChecklistLine(markdown, 3)).toBe(
       '## 本期执行清单\r\n- [ ] first\r\n- [ ] second\r\n',
+    );
+  });
+
+  it('toggles an indented task without changing its indentation', () => {
+    expect(toggleChecklistLine('before\n    - [ ] task\nafter', 2)).toBe(
+      'before\n    - [x] task\nafter',
     );
   });
 

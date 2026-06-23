@@ -1,6 +1,6 @@
 import type { ChecklistTask } from './models';
 
-const TASK_PATTERN = /^- \[([ xX])\](.*)$/;
+const TASK_PATTERN = /^(\s*)- \[([ xX])\](.*)$/;
 const HEADING_PATTERN = /^#{1,6}(?:[ \t]+|$)/;
 
 export function parseChecklistSection(
@@ -9,20 +9,20 @@ export function parseChecklistSection(
 ): ChecklistTask[] {
   const lines = markdown.split(/\r\n|\n|\r/);
   const headingLine = `## ${heading}`;
-  const start = lines.findIndex((line) => line === headingLine);
+  const start = lines.findIndex((line) => line.trim() === headingLine);
   if (start === -1) return [];
 
   const tasks: ChecklistTask[] = [];
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (line === undefined || HEADING_PATTERN.test(line)) break;
+    if (line === undefined || HEADING_PATTERN.test(line.trim())) break;
 
     const match = TASK_PATTERN.exec(line);
     if (match === null) continue;
     tasks.push({
       line: index + 1,
-      text: (match[2] ?? '').trim(),
-      checked: match[1] !== ' ',
+      text: (match[3] ?? '').trim(),
+      checked: match[2] !== ' ',
     });
   }
   return tasks;
@@ -38,7 +38,7 @@ export function toggleChecklistLine(markdown: string, oneBasedLine: number): str
     throw new Error(`Checklist task not found at line ${oneBasedLine}`);
   }
 
-  const replacement = match[1] === ' ' ? 'x' : ' ';
-  parts[index] = `${line.slice(0, 3)}${replacement}${line.slice(4)}`;
+  const replacement = match[2] === ' ' ? 'x' : ' ';
+  parts[index] = `${match[1]}- [${replacement}]${match[3]}`;
   return parts.join('');
 }
