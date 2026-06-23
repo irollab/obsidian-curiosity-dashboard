@@ -49,6 +49,29 @@ describe('AssociationResolver', () => {
     ]);
   });
 
+  it('never associates non-Markdown files as scripts or reviews', () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set('40-脚本大纲/39.png', '');
+    vault.files.set('60-发布复盘/39.csv', '');
+
+    const resolved = new AssociationResolver(vault, settings).resolve(baseTopic);
+
+    expect(resolved.scriptPath).toBeNull();
+    expect(resolved.reviewPath).toBeNull();
+  });
+
+  it('rejects fractional, negative, and unsafe issue numbers before matching', () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set('40-脚本大纲/3x9.md', '');
+    vault.files.set('40-脚本大纲/-1.md', '');
+    vault.files.set(`40-脚本大纲/${Number.MAX_SAFE_INTEGER + 1}.md`, '');
+    const resolver = new AssociationResolver(vault, settings);
+
+    expect(resolver.candidates('40-脚本大纲', 3.9)).toEqual([]);
+    expect(resolver.candidates('40-脚本大纲', -1)).toEqual([]);
+    expect(resolver.candidates('40-脚本大纲', Number.MAX_SAFE_INTEGER + 1)).toEqual([]);
+  });
+
   it('includes a unique asset folder candidate and deduplicates stable results', () => {
     const vault = new FakeVaultGateway();
     vault.directories.add('20-素材库/第039期-素材');

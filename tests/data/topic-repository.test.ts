@@ -12,6 +12,15 @@ function addTopic(
   vault.metadata.set(path, frontmatter);
 }
 
+class CountingVaultGateway extends FakeVaultGateway {
+  listMarkdownCalls = 0;
+
+  override listMarkdownPaths(): string[] {
+    this.listMarkdownCalls += 1;
+    return super.listMarkdownPaths();
+  }
+}
+
 describe('TopicRepository', () => {
   it('maps topic frontmatter and prefers a numeric issue over the filename', () => {
     const vault = new FakeVaultGateway();
@@ -68,6 +77,35 @@ describe('TopicRepository', () => {
     expect(topics[0]).toMatchObject({ issue: 7, title: '回退标题', stage: null });
   });
 
+  it('falls back from unsafe frontmatter issues and ignores an unsafe filename issue', () => {
+    const vault = new FakeVaultGateway();
+    addTopic(vault, '10-选题池/11-小数.md', { type: '选题', issue: 3.9 });
+    addTopic(vault, '10-选题池/12-负数.md', { type: '选题', issue: -1 });
+    addTopic(vault, '10-选题池/13-超大值.md', {
+      type: '选题', issue: Number.MAX_SAFE_INTEGER + 1,
+    });
+    addTopic(vault, `10-选题池/${Number.MAX_SAFE_INTEGER + 1}-文件名超大值.md`, {
+      type: '选题',
+    });
+
+    expect(new TopicRepository(vault, '10-选题池').all().map((topic) => topic.issue))
+      .toEqual([11, 12, 13]);
+  });
+
+  it('caches one topic snapshot for all derived queries', () => {
+    const vault = new CountingVaultGateway();
+    addTopic(vault, '10-选题池/1-A.md', {
+      type: '选题', issue: 1, status: '已立项', due_date: '2026-06-24',
+    });
+    const repository = new TopicRepository(vault, '10-选题池');
+
+    repository.all();
+    repository.productionQueue();
+    repository.thisWeek(new Date(2026, 5, 24, 12));
+
+    expect(vault.listMarkdownCalls).toBe(1);
+  });
+
   it('builds a non-focus production queue ordered by due date and issue', () => {
     const vault = new FakeVaultGateway();
     addTopic(vault, '10-选题池/1-A.md', {
@@ -88,9 +126,26 @@ describe('TopicRepository', () => {
     addTopic(vault, '10-选题池/6-F.md', {
       type: '选题', status: '待评估', issue: 6, due_date: '2026-06-20',
     });
+    addTopic(vault, '10-选题池/7-G.md', {
+      type: '选题', status: '已立项', issue: 7, due_date: '0000-00-00',
+    });
+    addTopic(vault, '10-选题池/8-Z.md', {
+      type: '选题', status: '已立项', issue: 8, due_date: '2026-07-02',
+    });
+    addTopic(vault, '10-选题池/8-A.md', {
+      type: '选题', status: '已立项', issue: 8, due_date: '2026-07-02',
+    });
 
-    expect(new TopicRepository(vault, '10-选题池').productionQueue().map((topic) => topic.issue))
-      .toEqual([2, 3, 1, 4]);
+    expect(new TopicRepository(vault, '10-选题池').productionQueue().map((topic) => topic.path))
+      .toEqual([
+        '10-选题池/2-B.md',
+        '10-选题池/3-C.md',
+        '10-选题池/1-A.md',
+        '10-选题池/8-A.md',
+        '10-选题池/8-Z.md',
+        '10-选题池/4-D.md',
+        '10-选题池/7-G.md',
+      ]);
   });
 
   it('uses local Monday and Sunday boundaries and excludes review or invalid dates', () => {

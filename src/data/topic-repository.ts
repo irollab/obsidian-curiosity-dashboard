@@ -3,21 +3,25 @@ import { normalizeStage } from '@/domain/stages';
 import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 
 export class TopicRepository {
+  private snapshot: TopicRecord[] | null = null;
+
   constructor(
     private readonly vault: VaultGateway,
     private readonly topicDir: string,
   ) {}
 
   all(): TopicRecord[] {
+    if (this.snapshot !== null) return this.snapshot;
     const directory = normalizePath(this.topicDir);
     const prefix = directory.length === 0 ? '' : `${directory}/`;
 
-    return this.vault
+    this.snapshot = this.vault
       .listMarkdownPaths()
       .map(normalizePath)
       .filter((path) => path.startsWith(prefix))
       .map((path) => this.toTopic(path))
       .filter((topic): topic is TopicRecord => topic !== null);
+    return this.snapshot;
   }
 
   productionQueue(): TopicRecord[] {
@@ -79,11 +83,15 @@ function pathValue(value: unknown): string | null {
 }
 
 function topicIssue(frontmatter: Frontmatter, basename: string): number | null {
-  if (typeof frontmatter.issue === 'number') {
-    return Number.isFinite(frontmatter.issue) ? frontmatter.issue : null;
+  if (typeof frontmatter.issue === 'number' && isValidIssue(frontmatter.issue)) {
+    return frontmatter.issue;
   }
   const value = Number.parseInt(basename.match(/^(\d+)/)?.[1] ?? '', 10);
-  return Number.isFinite(value) ? value : null;
+  return isValidIssue(value) ? value : null;
+}
+
+function isValidIssue(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
 }
 
 function titleFromBasename(basename: string): string {
@@ -91,10 +99,15 @@ function titleFromBasename(basename: string): string {
 }
 
 function compareTopics(left: TopicRecord, right: TopicRecord): number {
-  if (left.dueDate === null && right.dueDate !== null) return 1;
-  if (left.dueDate !== null && right.dueDate === null) return -1;
-  const dueOrder = (left.dueDate ?? '').localeCompare(right.dueDate ?? '');
-  return dueOrder !== 0 ? dueOrder : left.issue - right.issue;
+  const leftDue = left.dueDate === null ? null : parseLocalDate(left.dueDate);
+  const rightDue = right.dueDate === null ? null : parseLocalDate(right.dueDate);
+  if (leftDue === null && rightDue !== null) return 1;
+  if (leftDue !== null && rightDue === null) return -1;
+  const dueOrder = (leftDue?.valueOf() ?? 0) - (rightDue?.valueOf() ?? 0);
+  if (dueOrder !== 0) return dueOrder;
+  const issueOrder = left.issue - right.issue;
+  if (issueOrder !== 0) return issueOrder;
+  return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
 }
 
 function localWeekRange(now: Date): [Date, Date] {

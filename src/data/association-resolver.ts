@@ -21,12 +21,13 @@ export class AssociationResolver {
   }
 
   candidates(directory: string, issue: number, includeFolders = false): string[] {
+    if (!Number.isSafeInteger(issue) || issue <= 0) return [];
     const normalizedDirectory = normalizePath(directory);
     const prefix = normalizedDirectory.length === 0 ? '' : `${normalizedDirectory}/`;
     const issuePattern = new RegExp(`^(?:第)?0*${issue}(?:期|-|_|$)`);
     const paths = includeFolders
       ? [...this.vault.listPaths(), ...this.vault.listFolders()]
-      : this.vault.listPaths();
+      : this.vault.listMarkdownPaths();
 
     return [...new Set(paths.map(normalizePath))]
       .filter((path) => path.startsWith(prefix))
