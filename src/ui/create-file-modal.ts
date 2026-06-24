@@ -1,5 +1,6 @@
 import { type App, Modal, Setting, type TextComponent } from 'obsidian';
 
+import type { Translator } from '@/i18n/translator';
 import {
   sanitizeTitle,
   type CreateRequest,
@@ -11,9 +12,9 @@ export interface CreateFileDefaults extends CreateRequest {
 }
 
 export class CreateFileModal extends Modal {
-  static ask(app: App, defaults: CreateFileDefaults): Promise<CreateRequest | null> {
+  static ask(app: App, defaults: CreateFileDefaults, t: Translator): Promise<CreateRequest | null> {
     return new Promise((resolve) => {
-      new CreateFileModal(app, defaults, resolve).open();
+      new CreateFileModal(app, defaults, resolve, t).open();
     });
   }
 
@@ -28,6 +29,7 @@ export class CreateFileModal extends Modal {
     app: App,
     private readonly defaults: CreateFileDefaults,
     private readonly resolveResult: (value: CreateRequest | null) => void,
+    private readonly t: Translator,
   ) {
     super(app);
     this.issueInput = String(defaults.issue);
@@ -43,27 +45,27 @@ export class CreateFileModal extends Modal {
     this.modalEl.setAttribute('aria-labelledby', titleId);
     this.contentEl.createEl('h2', { text: this.defaults.heading, attr: { id: titleId } });
     new Setting(this.contentEl)
-      .setName('期数')
+      .setName(this.t.t('createFile.issue'))
       .addText((text) => {
-        labelInput(text, '期数', errorId);
+        labelInput(text, this.t.t('createFile.issue'), errorId);
         text.setValue(this.issueInput).onChange((value) => {
           this.issueInput = value.trim();
           this.updateGeneratedPath();
         });
       });
     new Setting(this.contentEl)
-      .setName('标题')
+      .setName(this.t.t('createFile.title'))
       .addText((text) => {
-        labelInput(text, '标题', errorId);
+        labelInput(text, this.t.t('createFile.title'), errorId);
         text.setValue(this.title).onChange((value) => {
           this.title = value;
           this.updateGeneratedPath();
         });
       });
     new Setting(this.contentEl)
-      .setName('目标路径')
+      .setName(this.t.t('createFile.targetPath'))
       .addText((text) => {
-        labelInput(text, '目标路径', errorId);
+        labelInput(text, this.t.t('createFile.targetPath'), errorId);
         this.targetText = text;
         text.setValue(this.targetPath).onChange((value) => {
           this.pathManuallyEdited = true;
@@ -77,9 +79,9 @@ export class CreateFileModal extends Modal {
     });
     new Setting(this.contentEl)
       .addButton((button) =>
-        button.setButtonText('取消').onClick(() => this.finish(null)))
+        button.setButtonText(this.t.t('common.cancel')).onClick(() => this.finish(null)))
       .addButton((button) =>
-        button.setCta().setButtonText('创建').onClick(() => {
+        button.setCta().setButtonText(this.t.t('common.create')).onClick(() => {
           const validation = this.validate();
           if (typeof validation === 'string') {
             error.setText(validation);
@@ -104,14 +106,14 @@ export class CreateFileModal extends Modal {
 
   private validate(): CreateRequest | string {
     const issue = parsePositiveSafeInteger(this.issueInput);
-    if (issue === null) return '期数必须是正安全整数。';
+    if (issue === null) return this.t.t('createFile.errIssue');
     const title = this.title.trim();
-    if (title.length === 0) return '标题不能为空。';
-    if (sanitizeTitle(title).length === 0) return '标题不能生成有效文件名。';
+    if (title.length === 0) return this.t.t('createFile.errTitleEmpty');
+    if (sanitizeTitle(title).length === 0) return this.t.t('createFile.errTitleInvalid');
     const targetPath = this.targetPath.trim();
-    if (targetPath.length === 0) return '目标路径不能为空。';
+    if (targetPath.length === 0) return this.t.t('createFile.errPathEmpty');
     if (!targetPath.endsWith('.md') || targetPath.endsWith('/.md')) {
-      return '目标路径必须以 .md 结尾。';
+      return this.t.t('createFile.errPathExt');
     }
     return {
       issue,

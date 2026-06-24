@@ -17,6 +17,7 @@ const SETTINGS: DashboardSettings = {
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
+  language: 'auto',
 };
 const NON_READY_FOCUS_CASES: Array<{
   kind: 'none' | 'multiple';

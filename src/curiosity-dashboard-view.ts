@@ -1,6 +1,8 @@
 import { ItemView, Notice, Platform, type WorkspaceLeaf } from 'obsidian';
 
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
+import type { TranslationKey } from '@/i18n/translations';
+import type { Translator } from '@/i18n/translator';
 import {
   sanitizeTitle,
   TemplateNotFoundError,
@@ -41,6 +43,10 @@ export class CuriosityDashboardView extends ItemView {
       success: (model) => this.renderModel(model),
       error: (error) => this.renderError(error),
     });
+  }
+
+  private get t(): Translator {
+    return this.plugin.translator();
   }
 
   getViewType(): string {
@@ -92,8 +98,8 @@ export class CuriosityDashboardView extends ItemView {
   private renderLoading(): void {
     this.prepareContent('curiosity-dashboard--loading');
     const status = this.contentEl.createDiv({ cls: 'curiosity-dashboard-state' });
-    status.createEl('h2', { text: '正在加载 Curiosity Dashboard' });
-    status.createEl('p', { text: '正在读取本地 Markdown 数据…' });
+    status.createEl('h2', { text: this.t.t('view.loadingTitle') });
+    status.createEl('p', { text: this.t.t('view.loadingBody') });
   }
 
   private renderModel(model: DashboardModel, focusActiveTab = false): void {
@@ -110,7 +116,7 @@ export class CuriosityDashboardView extends ItemView {
       createTopic: () => this.runCreate('topic', null),
       createScript: (topic) => this.runCreate('script', topic),
       createReview: (topic) => this.runCreate('review', topic),
-    }, this.activeTab);
+    }, this.activeTab, this.t);
     this.plugin.updateObservedDataPaths(observedReviewPaths(model));
     if (focusActiveTab) activeButton.focus();
   }
@@ -119,7 +125,7 @@ export class CuriosityDashboardView extends ItemView {
     try {
       await this.app.workspace.openLinkText(path, '', false);
     } catch (error) {
-      this.showActionError('无法打开文件', error);
+      this.showActionError('view.openFileFailed', error);
     }
   }
 
@@ -129,19 +135,19 @@ export class CuriosityDashboardView extends ItemView {
       await this.plugin.mutationService().toggleTask(path, task);
       await this.refresh();
     } catch (error) {
-      this.showActionError('无法更新任务', error);
+      this.showActionError('view.toggleTaskFailed', error);
     }
   }
 
   private async confirmAdvance(path: string, stage: Stage): Promise<void> {
     if (this.rejectReadOnlyWrite()) return;
-    if (!await ConfirmStageModal.ask(this.app, stage)) return;
+    if (!await ConfirmStageModal.ask(this.app, stage, this.t)) return;
     if (this.rejectReadOnlyWrite()) return;
     try {
       await this.plugin.mutationService().advanceStage(path, stage);
       await this.refresh();
     } catch (error) {
-      this.showActionError('无法推进阶段', error);
+      this.showActionError('view.advanceFailed', error);
     }
   }
 
@@ -165,30 +171,30 @@ export class CuriosityDashboardView extends ItemView {
   ): Promise<void> {
     if (this.rejectReadOnlyWrite()) return;
     if (this.lastModel === null) {
-      new Notice('Dashboard 数据尚未加载，不能创建文件。');
+      new Notice(this.t.t('view.notLoadedCreate'));
       return;
     }
     if (kind !== 'topic') {
       const currentTopic = currentFocusTopic(this.lastModel);
       if (topic === null || currentTopic === null || topic.path !== currentTopic.path) {
-        new Notice('当前作品已变化，不能创建关联文件。');
+        new Notice(this.t.t('view.focusChangedCreate'));
         return;
       }
       topic = currentTopic;
     }
 
     const defaults = this.createDefaults(kind, topic);
-    const request = await CreateFileModal.ask(this.app, defaults);
+    const request = await CreateFileModal.ask(this.app, defaults, this.t);
     if (request === null) return;
     if (this.rejectReadOnlyWrite()) return;
     if (this.lastModel === null) {
-      new Notice('Dashboard 状态已变化，已取消创建。');
+      new Notice(this.t.t('view.stateChangedCancel'));
       return;
     }
     if (kind !== 'topic') {
       const currentTopic = currentFocusTopic(this.lastModel);
       if (topic === null || currentTopic === null || topic.path !== currentTopic.path) {
-        new Notice('当前作品已变化，已取消创建。');
+        new Notice(this.t.t('view.focusChangedCancel'));
         return;
       }
       topic = currentTopic;
@@ -201,11 +207,11 @@ export class CuriosityDashboardView extends ItemView {
       if (error instanceof TemplateNotFoundError) {
         const opened = this.openSettings(true);
         new Notice(opened
-          ? `创建失败：模板不存在：${error.path}。已打开插件设置。`
-          : `创建失败：模板缺失且无法自动打开，请手动打开设置：${error.path}。`);
+          ? this.t.t('view.templateMissingOpened', { path: error.path })
+          : this.t.t('view.templateMissingManual', { path: error.path }));
         return;
       }
-      this.showActionError('创建失败', error);
+      this.showActionError('view.createFailed', error);
       return;
     }
 
@@ -216,11 +222,13 @@ export class CuriosityDashboardView extends ItemView {
         const authoritative = await this.plugin.dataService().load(Platform.isMobile);
         authoritativeTopic = currentFocusTopic(authoritative);
       } catch (error) {
-        associationError = new Error(`无法核对当前作品：${actionErrorMessage(error)}`);
+        associationError = new Error(
+          this.t.t('view.verifyFocusFailed', { detail: actionErrorMessage(error, this.t) }),
+        );
       }
       if (associationError === null) {
         if (authoritativeTopic === null || authoritativeTopic.path !== topic.path) {
-          associationError = new Error('当前作品已变化，文件未关联');
+          associationError = new Error(this.t.t('view.focusChangedNotLinked'));
         } else {
           try {
             await this.plugin.mutationService().setAssociationPath(
@@ -279,10 +287,10 @@ export class CuriosityDashboardView extends ItemView {
         ? settings.scriptTemplate
         : settings.reviewTemplate;
     const heading = kind === 'topic'
-      ? '创建选题卡'
+      ? this.t.t('modal.createTopicHeading')
       : kind === 'script'
-        ? '创建脚本'
-        : '创建发布复盘';
+        ? this.t.t('modal.createScriptHeading')
+        : this.t.t('modal.createReviewHeading');
     const targetPathFor = (valueIssue: number, valueTitle: string): string => {
       const safeTitle = sanitizeTitle(valueTitle);
       const filename = kind === 'topic'
@@ -314,16 +322,22 @@ export class CuriosityDashboardView extends ItemView {
     openError: unknown,
     refreshError: unknown,
   ): void {
+    const t = this.t;
     const details: string[] = [];
     if (associationError !== null) {
-      details.push(`关联失败：${actionErrorMessage(associationError)}`);
+      details.push(t.t('view.linkFailed', { detail: actionErrorMessage(associationError, t) }));
     }
-    if (openError !== null) details.push(`无法打开：${actionErrorMessage(openError)}`);
+    if (openError !== null) {
+      details.push(t.t('view.openFailedDetail', { detail: actionErrorMessage(openError, t) }));
+    }
     if (refreshError !== null) {
-      details.push(`无法刷新 Dashboard：${actionErrorMessage(refreshError)}`);
+      details.push(t.t('view.refreshFailedDetail', { detail: actionErrorMessage(refreshError, t) }));
     }
     const associated = kind !== 'topic' && associationError === null;
-    new Notice(`文件已创建${associated ? '并关联' : ''}，但${details.join('；且')}`);
+    new Notice(t.t('view.partialResult', {
+      suffix: associated ? t.t('view.linkedSuffix') : '',
+      details: details.join(t.t('view.detailJoin')),
+    }));
   }
 
   private openSettings(silent = false): boolean {
@@ -336,13 +350,13 @@ export class CuriosityDashboardView extends ItemView {
         typeof setting.open !== 'function' ||
         typeof setting.openTabById !== 'function'
       ) {
-        throw new Error('当前 Obsidian 版本未提供设置入口');
+        throw new Error(this.t.t('view.noSettingsEntry'));
       }
       setting.open.call(setting);
       setting.openTabById.call(setting, this.plugin.manifest.id);
       return true;
     } catch (error) {
-      if (!silent) this.showActionError('无法打开插件设置', error);
+      if (!silent) this.showActionError('view.openSettingsFailed', error);
       return false;
     }
   }
@@ -365,7 +379,7 @@ export class CuriosityDashboardView extends ItemView {
         this.plugin.settings.defaultTab = this.persistedTab;
         if (this.lastModel !== null) this.renderModel(this.lastModel, true);
       }
-      this.showActionError('无法保存当前标签', error);
+      this.showActionError('view.saveTabFailed', error);
     }
   }
 
@@ -384,47 +398,50 @@ export class CuriosityDashboardView extends ItemView {
       );
       await this.refresh();
     } catch (error) {
-      this.showActionError('无法保存关联路径', error);
+      this.showActionError('view.saveAssociationFailed', error);
     }
   }
 
-  private showActionError(context: string, error: unknown): void {
-    new Notice(`${context}：${actionErrorMessage(error)}`);
+  private showActionError(context: TranslationKey, error: unknown): void {
+    new Notice(this.t.t('common.contextDetail', {
+      context: this.t.t(context),
+      detail: actionErrorMessage(error, this.t),
+    }));
   }
 
   private rejectReadOnlyWrite(): boolean {
     if (!Platform.isMobile && this.lastModel?.mobileReadOnly !== true) return false;
-    new Notice('移动端只读，不能修改文件。');
+    new Notice(this.t.t('view.mobileReadonlyModify'));
     return true;
   }
 
   private renderError(error: unknown): void {
     this.prepareContent('curiosity-dashboard--error');
     const state = this.contentEl.createDiv({ cls: 'curiosity-dashboard-state' });
-    state.createEl('h2', { text: 'Dashboard 加载失败' });
-    state.createEl('p', { text: errorMessage(error) });
-    const retry = state.createEl('button', { text: '重试', type: 'button' });
+    state.createEl('h2', { text: this.t.t('view.errorTitle') });
+    state.createEl('p', { text: errorMessage(error, this.t) });
+    const retry = state.createEl('button', { text: this.t.t('view.retry'), type: 'button' });
     retry.addEventListener('click', () => void this.refresh());
   }
 
   private renderMobileDisabled(): void {
     this.prepareContent('curiosity-dashboard--mobile-disabled');
     const state = this.contentEl.createDiv({ cls: 'curiosity-dashboard-state' });
-    state.createEl('h2', { text: '移动端视图已关闭' });
-    state.createEl('p', { text: '请在插件设置中启用移动端简化视图。' });
+    state.createEl('h2', { text: this.t.t('view.mobileDisabledTitle') });
+    state.createEl('p', { text: this.t.t('view.mobileDisabledBody') });
   }
 }
 
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown, t: Translator): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
-    : '读取本地数据时发生未知错误，请重试。';
+    : t.t('view.unknownLoadError');
 }
 
-function actionErrorMessage(error: unknown): string {
+function actionErrorMessage(error: unknown, t: Translator): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
-    : '未知错误';
+    : t.t('common.unknownError');
 }
 
 function nextVisibleIssue(model: DashboardModel | null): number {

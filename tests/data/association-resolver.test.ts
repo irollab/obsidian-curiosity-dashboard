@@ -17,6 +17,7 @@ const settings: DashboardSettings = {
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
+  language: 'auto',
 };
 
 const baseTopic: TopicRecord = {

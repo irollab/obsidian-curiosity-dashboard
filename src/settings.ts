@@ -1,5 +1,7 @@
 import { type App, Notice, PluginSettingTab, Setting } from 'obsidian';
 
+import type { LanguageSetting } from '@/i18n/locale';
+
 import type CuriosityDashboardPlugin from './main';
 
 export interface DashboardSettings {
@@ -14,6 +16,7 @@ export interface DashboardSettings {
   openOnStartup: boolean;
   defaultTab: 'overview' | 'tasks' | 'data';
   enableMobileView: boolean;
+  language: LanguageSetting;
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -28,6 +31,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
+  language: 'auto',
 };
 
 const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'data']);
@@ -51,6 +55,7 @@ export function parseSettings(raw: unknown): DashboardSettings {
       typeof values.enableMobileView === 'boolean'
         ? values.enableMobileView
         : DEFAULT_SETTINGS.enableMobileView,
+    language: isLanguageSetting(values.language) ? values.language : DEFAULT_SETTINGS.language,
   };
 }
 
@@ -64,6 +69,10 @@ function nonEmptyStringOr(value: unknown, fallback: string): string {
 
 function isDefaultTab(value: unknown): value is DashboardSettings['defaultTab'] {
   return typeof value === 'string' && DEFAULT_TABS.has(value);
+}
+
+export function isLanguageSetting(value: unknown): value is LanguageSetting {
+  return value === 'auto' || value === 'zh' || value === 'en';
 }
 
 type TextSettingKey =
@@ -82,26 +91,27 @@ export class DashboardSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    const t = this.plugin.translator().t;
     this.containerEl.empty();
-    this.containerEl.createEl('h2', { text: 'Curiosity Dashboard' });
-    this.addText('Topic directory', 'topicDir');
-    this.addText('Script directory', 'scriptDir');
-    this.addText('Asset directory', 'assetDir');
-    this.addText('Review directory', 'reviewDir');
-    this.addText('Topic template', 'topicTemplate');
-    this.addText('Script template', 'scriptTemplate');
-    this.addText('Review template', 'reviewTemplate');
-    this.addText('Background image', 'backgroundPath');
+    this.containerEl.createEl('h2', { text: t('settings.heading') });
+    this.addText(t('settings.topicDir'), 'topicDir');
+    this.addText(t('settings.scriptDir'), 'scriptDir');
+    this.addText(t('settings.assetDir'), 'assetDir');
+    this.addText(t('settings.reviewDir'), 'reviewDir');
+    this.addText(t('settings.topicTemplate'), 'topicTemplate');
+    this.addText(t('settings.scriptTemplate'), 'scriptTemplate');
+    this.addText(t('settings.reviewTemplate'), 'reviewTemplate');
+    this.addText(t('settings.backgroundPath'), 'backgroundPath');
 
-    new Setting(this.containerEl).setName('Open on startup').addToggle((toggle) =>
+    new Setting(this.containerEl).setName(t('settings.openOnStartup')).addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.openOnStartup).onChange((value) => {
         this.updateSetting('openOnStartup', value);
       }),
     );
 
-    new Setting(this.containerEl).setName('Default tab').addDropdown((dropdown) =>
+    new Setting(this.containerEl).setName(t('settings.defaultTab')).addDropdown((dropdown) =>
       dropdown
-        .addOptions({ overview: 'Overview', tasks: 'Tasks', data: 'Data' })
+        .addOptions({ overview: t('tab.overview'), tasks: t('tab.tasks'), data: t('tab.data') })
         .setValue(this.plugin.settings.defaultTab)
         .onChange((value) => {
           if (isDefaultTab(value)) this.updateSetting('defaultTab', value);
@@ -109,12 +119,28 @@ export class DashboardSettingTab extends PluginSettingTab {
     );
 
     new Setting(this.containerEl)
-      .setName('Enable simplified mobile view')
+      .setName(t('settings.enableMobileView'))
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.enableMobileView).onChange((value) => {
           this.updateSetting('enableMobileView', value);
         }),
       );
+
+    new Setting(this.containerEl).setName(t('settings.language')).addDropdown((dropdown) =>
+      dropdown
+        .addOptions({
+          auto: t('settings.language.auto'),
+          zh: t('settings.language.zh'),
+          en: t('settings.language.en'),
+        })
+        .setValue(this.plugin.settings.language)
+        .onChange((value) => {
+          if (isLanguageSetting(value)) {
+            this.updateSetting('language', value);
+            this.display();
+          }
+        }),
+    );
   }
 
   private addText(name: string, key: TextSettingKey): void {
@@ -131,8 +157,9 @@ export class DashboardSettingTab extends PluginSettingTab {
   ): void {
     this.plugin.settings[key] = value;
     void this.plugin.saveSettings().catch((error: unknown) => {
-      const detail = error instanceof Error ? error.message : '未知错误';
-      new Notice(`无法保存 Curiosity Dashboard 设置：${detail}`);
+      const t = this.plugin.translator().t;
+      const detail = error instanceof Error ? error.message : t('common.unknownError');
+      new Notice(t('settings.saveFailed', { detail }));
     });
   }
 }

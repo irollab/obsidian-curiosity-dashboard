@@ -145,6 +145,7 @@ vi.mock('obsidian', () => ({
   Setting: obsidianMock.Setting,
 }));
 
+import { createTranslator } from '@/i18n/translator';
 import { CreateFileModal } from '@/ui/create-file-modal';
 import { ConfirmStageModal } from '@/ui/confirm-stage-modal';
 
@@ -181,7 +182,7 @@ describe('ConfirmStageModal', () => {
   });
 
   it('shows the exact transition and resolves true only once on repeated confirmation', async () => {
-    const result = ConfirmStageModal.ask({} as never, '制作');
+    const result = ConfirmStageModal.ask({} as never, '制作', createTranslator('zh'));
 
     expect(obsidianMock.state.lastModal?.contentEl.children.map((child) => child.text)).toContain(
       '从「制作」推进到「发布」？',
@@ -199,20 +200,20 @@ describe('ConfirmStageModal', () => {
   });
 
   it('treats cancel, close, and ESC-style close as one false settlement', async () => {
-    const cancelled = ConfirmStageModal.ask({} as never, '策划');
+    const cancelled = ConfirmStageModal.ask({} as never, '策划', createTranslator('zh'));
     button('取消').trigger();
     obsidianMock.state.lastModal?.close();
     await expect(cancelled).resolves.toBe(false);
 
     obsidianMock.state.settings.length = 0;
-    const closed = ConfirmStageModal.ask({} as never, '策划');
+    const closed = ConfirmStageModal.ask({} as never, '策划', createTranslator('zh'));
     obsidianMock.state.lastModal?.close();
     obsidianMock.state.lastModal?.close();
     await expect(closed).resolves.toBe(false);
   });
 
   it('cannot confirm the terminal stage', async () => {
-    const result = ConfirmStageModal.ask({} as never, '复盘');
+    const result = ConfirmStageModal.ask({} as never, '复盘', createTranslator('zh'));
 
     expect(button('推进').disabled).toBe(true);
     expect(obsidianMock.state.lastModal?.contentEl.children.map((child) => child.text)).toContain(
@@ -230,7 +231,7 @@ describe('CreateFileModal', () => {
   });
 
   it('shows labeled issue, title, and editable target path and submits once', async () => {
-    const result = CreateFileModal.ask({} as never, createDefaults());
+    const result = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
 
     expect(setting('期数').texts[0]?.value).toBe('39');
     expect(setting('标题').texts[0]?.value).toBe('首页');
@@ -263,7 +264,7 @@ describe('CreateFileModal', () => {
   });
 
   it('updates the default path with issue/title until the path is manually edited', async () => {
-    const result = CreateFileModal.ask({} as never, createDefaults());
+    const result = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
     setting('期数').texts[0]?.trigger('40');
     setting('标题').texts[0]?.trigger('新:标题');
     expect(setting('目标路径').texts[0]?.value).toBe('40-脚本大纲/40-新-标题成稿.md');
@@ -281,7 +282,7 @@ describe('CreateFileModal', () => {
   });
 
   it.each(['1abc', '1.5', '0', '-1', '9007199254740992', ''])('rejects invalid issue %j visibly', async (value) => {
-    const result = CreateFileModal.ask({} as never, createDefaults());
+    const result = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
     setting('期数').texts[0]?.trigger(value);
     button('创建').trigger();
 
@@ -297,7 +298,7 @@ describe('CreateFileModal', () => {
     ['blank target', '目标路径', ' ', '目标路径不能为空'],
     ['non markdown target', '目标路径', 'safe/file.txt', '目标路径必须以 .md 结尾'],
   ])('rejects %s with a visible error', async (_case, field, value, message) => {
-    const result = CreateFileModal.ask({} as never, createDefaults());
+    const result = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
     setting(field).texts[0]?.trigger(value);
     button('创建').trigger();
 
@@ -308,13 +309,13 @@ describe('CreateFileModal', () => {
   });
 
   it('settles cancellation and external close once without a request', async () => {
-    const cancelled = CreateFileModal.ask({} as never, createDefaults());
+    const cancelled = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
     button('取消').trigger();
     obsidianMock.state.lastModal?.close();
     await expect(cancelled).resolves.toBeNull();
 
     obsidianMock.state.settings.length = 0;
-    const closed = CreateFileModal.ask({} as never, createDefaults());
+    const closed = CreateFileModal.ask({} as never, createDefaults(), createTranslator('zh'));
     obsidianMock.state.lastModal?.close();
     await expect(closed).resolves.toBeNull();
   });

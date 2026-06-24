@@ -1,6 +1,9 @@
 import { Notice, Plugin, type WorkspaceLeaf } from 'obsidian';
 
 import { ObsidianVaultGateway } from '@/adapters/obsidian-vault-gateway';
+import { resolveLocale } from '@/i18n/locale';
+import type { TranslationKey } from '@/i18n/translations';
+import { createTranslator, type Translator } from '@/i18n/translator';
 import { DashboardDataService } from '@/data/dashboard-data-service';
 import { TemplateCreationService } from '@/mutations/template-creation-service';
 import { VaultMutationService } from '@/mutations/vault-mutation-service';
@@ -37,7 +40,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
     this.refreshScheduler = new DebouncedRefresh(
       () => this.refreshActiveView(),
       200,
-      (error) => this.reportError('Dashboard 自动刷新失败', error),
+      (error) => this.reportError('error.autoRefreshFailed', error),
     );
 
     this.registerView(
@@ -47,7 +50,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
     this.addSettingTab(new DashboardSettingTab(this.app, this));
     this.addRibbonIcon('telescope', 'Open Curiosity Dashboard', () => {
       void this.activateView().catch((error: unknown) =>
-        this.reportError('无法打开 Curiosity Dashboard', error),
+        this.reportError('error.openFailed', error),
       );
     });
     this.addCommand({
@@ -55,7 +58,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
       name: 'Open Curiosity Dashboard',
       callback: () => {
         void this.activateView().catch((error: unknown) =>
-          this.reportError('无法打开 Curiosity Dashboard', error),
+          this.reportError('error.openFailed', error),
         );
       },
     });
@@ -85,7 +88,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
       this.app.workspace.onLayoutReady(() => {
         if (this.unloaded) return;
         void this.activateView().catch((error: unknown) =>
-          this.reportError('无法在启动时打开 Curiosity Dashboard', error),
+          this.reportError('error.openOnStartupFailed', error),
         );
       });
     }
@@ -116,6 +119,12 @@ export default class CuriosityDashboardPlugin extends Plugin {
 
   templateService(): TemplateCreationService {
     return new TemplateCreationService(this.gateway);
+  }
+
+  translator(): Translator {
+    const obsidianLang =
+      typeof window !== 'undefined' ? window.localStorage.getItem('language') : null;
+    return createTranslator(resolveLocale(this.settings.language, obsidianLang));
   }
 
   updateObservedDataPaths(paths: Iterable<string>): void {
@@ -183,8 +192,10 @@ export default class CuriosityDashboardPlugin extends Plugin {
     if (view !== null) await view.refresh();
   }
 
-  private reportError(context: string, error: unknown): void {
+  private reportError(context: TranslationKey, error: unknown): void {
+    const t = this.translator().t;
     console.error(context, error);
-    new Notice(`${context}：${error instanceof Error ? error.message : '未知错误'}`);
+    const detail = error instanceof Error ? error.message : t('common.unknownError');
+    new Notice(t('common.contextDetail', { context: t(context), detail }));
   }
 }

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from 'obsidian';
 
+import { createTranslator } from '@/i18n/translator';
+
 import type CuriosityDashboardPlugin from '../src/main';
 import { DashboardSettingTab, DEFAULT_SETTINGS, parseSettings } from '../src/settings';
 
@@ -93,6 +95,7 @@ function makeTab(saveSettings = vi.fn(async () => undefined)) {
   const plugin = {
     settings: { ...DEFAULT_SETTINGS },
     saveSettings,
+    translator: () => createTranslator('en'),
   } as unknown as CuriosityDashboardPlugin;
   const tab = new DashboardSettingTab({} as App, plugin);
   tab.display();
@@ -119,6 +122,7 @@ describe('dashboard settings', () => {
       openOnStartup: false,
       defaultTab: 'overview',
       enableMobileView: true,
+      language: 'auto',
     });
   });
 
@@ -135,6 +139,7 @@ describe('dashboard settings', () => {
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
+      language: 'en',
     } as const;
 
     expect(parseSettings(settings)).toEqual(settings);
@@ -158,6 +163,7 @@ describe('dashboard settings', () => {
         openOnStartup: 'true',
         defaultTab: 'invalid',
         enableMobileView: 0,
+        language: 'fr',
       }),
     ).toEqual(DEFAULT_SETTINGS);
     expect(
@@ -172,6 +178,13 @@ describe('dashboard settings', () => {
         backgroundPath: '',
       }),
     ).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('falls back language to auto for invalid values', () => {
+    expect(parseSettings({ language: 'fr' }).language).toBe('auto');
+    expect(parseSettings({ language: 5 }).language).toBe('auto');
+    expect(parseSettings({ language: 'zh' }).language).toBe('zh');
+    expect(parseSettings({ language: 'en' }).language).toBe('en');
   });
 
   it('uses defaults for non-object persisted data', () => {
@@ -196,8 +209,10 @@ describe('dashboard settings', () => {
       { kind: 'toggle', name: 'Open on startup', value: false },
       { kind: 'dropdown', name: 'Default tab', value: 'overview' },
       { kind: 'toggle', name: 'Enable simplified mobile view', value: true },
+      { kind: 'dropdown', name: 'Language', value: 'auto' },
     ]);
     expect(obsidianMock.settings[9]?.options).toEqual({ overview: 'Overview', tasks: 'Tasks', data: 'Data' });
+    expect(obsidianMock.settings[11]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
   });
 
   it('persists every setting change', async () => {
@@ -209,8 +224,9 @@ describe('dashboard settings', () => {
     expect(obsidianMock.settings[8]?.onChange(true)).toBeUndefined();
     expect(obsidianMock.settings[9]?.onChange('data')).toBeUndefined();
     expect(obsidianMock.settings[10]?.onChange(false)).toBeUndefined();
+    expect(obsidianMock.settings[11]?.onChange('zh')).toBeUndefined();
 
-    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(11));
+    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(12));
 
     expect(plugin.settings).toEqual({
       topicDir: 'changed',
@@ -224,21 +240,26 @@ describe('dashboard settings', () => {
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
+      language: 'zh',
     });
-    expect(plugin.saveSettings).toHaveBeenCalledTimes(11);
+    expect(plugin.saveSettings).toHaveBeenCalledTimes(12);
   });
 
   it('contains save failures at every onChange boundary and shows a notice', async () => {
     const saveSettings = vi.fn(async () => Promise.reject(new Error('disk full')));
     makeTab(saveSettings);
 
-    for (const setting of obsidianMock.settings) {
-      const value = setting.kind === 'toggle' ? true : setting.kind === 'dropdown' ? 'data' : 'changed';
+    for (const setting of [...obsidianMock.settings]) {
+      const value = setting.kind === 'toggle'
+        ? true
+        : setting.kind === 'dropdown'
+          ? (setting.name === 'Language' ? 'zh' : 'data')
+          : 'changed';
       const result = setting.onChange(value);
       expect(result).toBeUndefined();
     }
 
-    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(11));
+    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(12));
     expect(obsidianMock.notices.every((message) => message.includes('disk full'))).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
+import type { Translator } from '@/i18n/translator';
 
 import { renderHero } from './renderers/hero';
 import { renderMissionControl } from './renderers/mission-control';
@@ -24,32 +25,33 @@ export interface DashboardHandlers {
   createReview(topic: TopicRecord): Promise<void>;
 }
 
-const TABS: ReadonlyArray<{ id: DashboardTab; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'data', label: 'Data' },
-];
-
 export class DashboardRenderer {
   render(
     container: HTMLElement,
     model: DashboardModel,
     handlers: DashboardHandlers,
     activeTab: DashboardTab,
+    t: Translator,
   ): HTMLButtonElement {
     container.empty();
     container.addClass('curiosity-dashboard');
 
+    const tabsConfig: ReadonlyArray<{ id: DashboardTab; label: string }> = [
+      { id: 'overview', label: t.t('tab.overview') },
+      { id: 'tasks', label: t.t('tab.tasks') },
+      { id: 'data', label: t.t('tab.data') },
+    ];
+
     const shell = container.createDiv({ cls: 'curiosity-dashboard-shell' });
     shell.dataset.activeTab = activeTab;
-    renderHero(shell, model, handlers);
+    renderHero(shell, model, handlers, t);
 
     const content = shell.createDiv({ cls: 'curiosity-content' });
     const tabs = content.createDiv({
       cls: 'curiosity-view-tabs',
-      attr: { 'aria-label': 'Dashboard views', role: 'tablist' },
+      attr: { 'aria-label': t.t('tabs.aria'), role: 'tablist' },
     });
-    const buttons = TABS.map(({ id, label }) => {
+    const buttons = tabsConfig.map(({ id, label }) => {
       const selected = id === activeTab;
       const button = tabs.createEl('button', {
         cls: selected ? 'is-active' : 'is-inactive',
@@ -80,7 +82,7 @@ export class DashboardRenderer {
       });
     }
 
-    for (const { id } of TABS) {
+    for (const { id } of tabsConfig) {
       const active = id === activeTab;
       const panel = content.createDiv({
         cls: `curiosity-tab-panel curiosity-tab-panel--${id}`,
@@ -94,20 +96,20 @@ export class DashboardRenderer {
       panel.hidden = !active;
       if (!active) continue;
       if (id === 'overview') {
-        renderMissionControl(panel, model, handlers);
-        renderThisWeek(panel, model.thisWeek, handlers.openPath);
-        renderProductionQueue(panel, model.queue, handlers.openPath);
-        renderChannelPulse(panel, model, handlers.openPath);
-        renderQuickActions(panel, model, handlers);
+        renderMissionControl(panel, model, handlers, t);
+        renderThisWeek(panel, model.thisWeek, handlers.openPath, t);
+        renderProductionQueue(panel, model.queue, handlers.openPath, t);
+        renderChannelPulse(panel, model, handlers.openPath, t);
+        renderQuickActions(panel, model, handlers, t);
       } else if (id === 'tasks') {
-        renderMissionControl(panel, model, handlers);
-        renderThisWeek(panel, model.thisWeek, handlers.openPath);
+        renderMissionControl(panel, model, handlers, t);
+        renderThisWeek(panel, model.thisWeek, handlers.openPath, t);
       } else {
-        renderChannelPulse(panel, model, handlers.openPath);
+        renderChannelPulse(panel, model, handlers.openPath, t);
       }
     }
 
-    renderDock(shell, model, handlers);
+    renderDock(shell, model, handlers, t);
 
     const activeButton = buttons.find(({ id }) => id === activeTab)?.button;
     if (activeButton === undefined) throw new Error(`Unknown dashboard tab: ${activeTab}`);

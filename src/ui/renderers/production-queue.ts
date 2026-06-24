@@ -1,4 +1,5 @@
 import type { TopicRecord } from '@/domain/models';
+import type { Translator } from '@/i18n/translator';
 
 const VISIBLE_LIMIT = 6;
 
@@ -6,14 +7,15 @@ export function renderProductionQueue(
   parent: HTMLElement,
   topics: TopicRecord[],
   openPath: (path: string) => Promise<void>,
+  t: Translator,
 ): void {
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-production-queue',
   });
-  section.createEl('h2', { text: 'Production Queue' });
+  section.createEl('h2', { text: t.t('queue.title') });
   const grid = section.createDiv({ cls: 'curiosity-queue-grid' });
   if (topics.length === 0) {
-    grid.createEl('p', { text: '暂无后续制作队列。' });
+    grid.createEl('p', { text: t.t('queue.empty') });
     return;
   }
 
@@ -25,17 +27,21 @@ export function renderProductionQueue(
     card.createDiv({ cls: 'curiosity-kicker', text: `ISSUE ${topic.issue}` });
     const button = card.createEl('button', { text: topic.title, type: 'button' });
     button.addEventListener('click', () => void openPath(topic.path));
+    const stageText = topic.stage === null ? t.t('common.unset') : t.stageLabel(topic.stage);
     card.createEl('p', {
       text: [
-        topic.stage ?? '未设置',
-        topic.priority ?? '未设置',
-        topic.dueDate ?? '未设置',
+        stageText,
+        topic.priority ?? t.t('common.unset'),
+        topic.dueDate ?? t.t('common.unset'),
       ].join(' · '),
     });
   }
 
   const overflow = topics.length - VISIBLE_LIMIT;
   if (overflow > 0) {
-    section.createEl('p', { cls: 'curiosity-overflow-count', text: `另有 ${overflow} 项` });
+    section.createEl('p', {
+      cls: 'curiosity-overflow-count',
+      text: t.t('overflow.items', { count: overflow }),
+    });
   }
 }

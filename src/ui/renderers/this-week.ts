@@ -1,4 +1,5 @@
 import type { TopicRecord } from '@/domain/models';
+import type { Translator } from '@/i18n/translator';
 
 const VISIBLE_LIMIT = 8;
 
@@ -6,13 +7,14 @@ export function renderThisWeek(
   parent: HTMLElement,
   topics: TopicRecord[],
   openPath: (path: string) => Promise<void>,
+  t: Translator,
 ): void {
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-this-week',
   });
-  section.createEl('h2', { text: 'This Week' });
+  section.createEl('h2', { text: t.t('thisWeek.title') });
   if (topics.length === 0) {
-    section.createEl('p', { text: '本周暂无已设置截止日期的作品。' });
+    section.createEl('p', { text: t.t('thisWeek.empty') });
     return;
   }
 
@@ -24,15 +26,16 @@ export function renderThisWeek(
       type: 'button',
     });
     button.addEventListener('click', () => void openPath(topic.path));
+    const stageText = topic.stage === null ? t.t('common.unset') : t.stageLabel(topic.stage);
     item.createSpan({
       cls: 'curiosity-item-meta',
-      text: `${topic.stage ?? '未设置'} · ${topic.dueDate ?? '未设置'}`,
+      text: `${stageText} · ${topic.dueDate ?? t.t('common.unset')}`,
     });
   }
-  renderOverflow(section, topics.length - VISIBLE_LIMIT);
+  renderOverflow(section, topics.length - VISIBLE_LIMIT, t);
 }
 
-function renderOverflow(parent: HTMLElement, count: number): void {
+function renderOverflow(parent: HTMLElement, count: number, t: Translator): void {
   if (count <= 0) return;
-  parent.createEl('p', { cls: 'curiosity-overflow-count', text: `另有 ${count} 项` });
+  parent.createEl('p', { cls: 'curiosity-overflow-count', text: t.t('overflow.items', { count }) });
 }

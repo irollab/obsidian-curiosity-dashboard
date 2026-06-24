@@ -8,6 +8,7 @@ vi.mock('obsidian', () => ({
 }));
 
 import type { DashboardModel, TopicRecord } from '@/domain/models';
+import { createTranslator } from '@/i18n/translator';
 import {
   DashboardRenderer,
   type DashboardHandlers,
@@ -68,7 +69,9 @@ function render(
   actions = handlers(),
 ): { actions: DashboardHandlers; root: FakeElement } {
   const root = new FakeElement();
-  new DashboardRenderer().render(root as unknown as HTMLElement, value, actions, activeTab);
+  new DashboardRenderer().render(
+    root as unknown as HTMLElement, value, actions, activeTab, createTranslator('zh'),
+  );
   return { actions, root };
 }
 
@@ -94,9 +97,9 @@ describe('dashboard secondary modules', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
-    ['overview', ['Mission Control', 'This Week', 'Production Queue', 'Channel Pulse', 'Quick Actions']],
-    ['tasks', ['Mission Control', 'This Week']],
-    ['data', ['Channel Pulse']],
+    ['overview', ['任务中心', '本周', '制作队列', '渠道脉搏', '快捷操作']],
+    ['tasks', ['任务中心', '本周']],
+    ['data', ['渠道脉搏']],
   ] as const)('composes only the intended modules in the %s panel', (activeTab, expected) => {
     const { root } = render(model(), activeTab);
     const activePanel = findAll(
@@ -118,8 +121,8 @@ describe('dashboard secondary modules', () => {
       queue: Array.from({ length: 9 }, (_, index) => topicAt(index)),
       thisWeek: Array.from({ length: 10 }, (_, index) => topicAt(index)),
     }));
-    const week = section(root, 'This Week');
-    const queue = section(root, 'Production Queue');
+    const week = section(root, '本周');
+    const queue = section(root, '制作队列');
 
     expect(findAll(week, (element) => element.tag === 'li')).toHaveLength(8);
     expect(findByText(week, '另有 2 项')).toBeDefined();
@@ -155,7 +158,7 @@ describe('dashboard secondary modules', () => {
       ],
       reviewPath: '60-发布复盘/39-review.md',
     }), 'data');
-    const pulse = section(root, 'Channel Pulse');
+    const pulse = section(root, '渠道脉搏');
     const headers = findAll(pulse, (element) => element.tag === 'th');
 
     expect(headers.map((element) => element.text)).toEqual([
@@ -188,7 +191,7 @@ describe('dashboard secondary modules', () => {
     }));
     const commentEvidence = Array.from({ length: 10 }, (_, index) => `评论 ${index + 1}`);
     const { root } = render(model({ commentEvidence, metrics }), 'data');
-    const pulse = section(root, 'Channel Pulse');
+    const pulse = section(root, '渠道脉搏');
 
     expect(findAll(pulse, (element) => element.tag === 'tbody')[0]?.children).toHaveLength(12);
     expect(findByText(pulse, '平台 12')).toBeDefined();
@@ -233,7 +236,7 @@ describe('dashboard secondary modules', () => {
     expect(findByText(desktop.root, '创建选题卡')).toBeDefined();
     expect(findByText(desktop.root, '创建脚本')).toBeDefined();
     expect(findByText(desktop.root, '创建复盘')).toBeDefined();
-    expect(findByText(desktop.root, 'Ideas')).toBeDefined();
+    expect(findByText(desktop.root, '灵感')).toBeDefined();
 
     const mobile = render(model({ mobileReadOnly: true }));
     expect(findByText(mobile.root, '移动端只读：创建操作不可用。')).toBeDefined();
@@ -266,7 +269,7 @@ describe('dashboard secondary modules', () => {
     const pendingScript = new Promise<void>((resolve) => { resolveScript = resolve; });
     const dock = render(model(), 'tasks');
     vi.mocked(dock.actions.createScript).mockReturnValueOnce(pendingScript);
-    const dockButton = findByText(dock.root, 'Script')?.parent;
+    const dockButton = findByText(dock.root, '脚本')?.parent;
     dockButton?.click();
     dockButton?.click();
     expect(dock.actions.createScript).toHaveBeenCalledOnce();
@@ -279,9 +282,9 @@ describe('dashboard secondary modules', () => {
   });
 
   it.each([
-    ['Mission', 'openPath'],
-    ['Tasks', 'selectTab'],
-    ['Data', 'selectTab'],
+    ['作品', 'openPath'],
+    ['任务', 'selectTab'],
+    ['数据', 'selectTab'],
   ] as const)('keeps the Dock %s action guarded until its handler promise settles', async (label, handler) => {
     let resolveAction!: () => void;
     const pendingAction = new Promise<void>((resolve) => { resolveAction = resolve; });
@@ -316,7 +319,7 @@ describe('dashboard secondary modules', () => {
       focus: { kind: 'ready', topic: { ...current, stage: '制作' } },
     }));
     const dock = findAll(root, (element) => element.classList.has('curiosity-dock'))[0]!;
-    const labels = ['Ideas', 'Mission', 'Tasks', 'Script', 'Data', 'Review', 'Settings'];
+    const labels = ['灵感', '作品', '任务', '脚本', '数据', '复盘', '设置'];
 
     expect(findAll(dock, (element) => element.getAttr('data-icon') !== null)).toHaveLength(7);
     expect(vi.mocked(setIcon)).toHaveBeenCalledTimes(7);
@@ -341,7 +344,7 @@ describe('dashboard secondary modules', () => {
     const { root } = render(model({ focus: { kind: 'none' } }), 'overview', actions);
     const dock = findAll(root, (element) => element.classList.has('curiosity-dock'))[0]!;
 
-    for (const label of ['Mission', 'Script', 'Review']) {
+    for (const label of ['作品', '脚本', '复盘']) {
       const button = findByText(dock, label)?.parent;
       expect(button?.disabled).toBe(true);
       expect(button?.getAttr('aria-label')).toContain('不可用');
@@ -349,9 +352,9 @@ describe('dashboard secondary modules', () => {
     expect(findByText(dock, '未设置当前作品')).toBeDefined();
     expect(findByText(dock, '当前作品未关联脚本')).toBeDefined();
     expect(findByText(dock, '当前作品未关联复盘')).toBeDefined();
-    expect(findByText(dock, 'Tasks')?.parent?.disabled).toBe(false);
-    expect(findByText(dock, 'Data')?.parent?.disabled).toBe(false);
-    expect(findByText(dock, 'Settings')?.parent?.disabled).toBe(false);
+    expect(findByText(dock, '任务')?.parent?.disabled).toBe(false);
+    expect(findByText(dock, '数据')?.parent?.disabled).toBe(false);
+    expect(findByText(dock, '设置')?.parent?.disabled).toBe(false);
   });
 
   it('sets button type explicitly for every secondary-module control', () => {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceLeaf } from 'obsidian';
 
 import type { DashboardModel } from '@/domain/models';
+import { createTranslator } from '@/i18n/translator';
 import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { TemplateNotFoundError } from '@/mutations/template-creation-service';
 import { DEFAULT_SETTINGS } from '@/settings';
@@ -201,6 +202,7 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
     templateService: () => ({ create: templateCreate }),
+    translator: () => createTranslator('zh'),
     updateObservedDataPaths: vi.fn(),
   };
   const view = new CuriosityDashboardView(
@@ -224,6 +226,26 @@ function findByText(
     if (match !== undefined) return match;
   }
   return undefined;
+}
+
+function findDock(
+  root: InstanceType<typeof obsidianMock.FakeElement>,
+): InstanceType<typeof obsidianMock.FakeElement> | undefined {
+  if (root.classList.has('curiosity-dock')) return root;
+  for (const child of root.children) {
+    const match = findDock(child);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
+// Dock labels (e.g. '复盘') can collide with stage-track labels; scope the lookup to the dock.
+function findDockLabel(
+  root: InstanceType<typeof obsidianMock.FakeElement>,
+  label: string,
+): InstanceType<typeof obsidianMock.FakeElement> | undefined {
+  const dock = findDock(root);
+  return dock === undefined ? undefined : findByText(dock, label);
 }
 
 describe('CuriosityDashboardView', () => {
@@ -280,7 +302,7 @@ describe('CuriosityDashboardView', () => {
     resolve(model);
     await refresh;
 
-    expect(findByText(view.contentEl, 'Chase your curiosity')).toBeDefined();
+    expect(findByText(view.contentEl, '追逐你的好奇心')).toBeDefined();
     expect(view.contentEl.children[0]?.dataset.activeTab).toBe('tasks');
     expect(obsidianMock.getActiveElement()).toBeNull();
   });
@@ -297,7 +319,7 @@ describe('CuriosityDashboardView', () => {
 
     findByText(view.contentEl, '重试')?.click();
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(findByText(view.contentEl, 'Chase your curiosity')).toBeDefined());
+    await vi.waitFor(() => expect(findByText(view.contentEl, '追逐你的好奇心')).toBeDefined());
   });
 
   it('does not load data when mobile view is disabled', async () => {
@@ -331,13 +353,13 @@ describe('CuriosityDashboardView', () => {
     const { plugin, saveSettings, view } = makeHarness(load);
     await view.refresh();
 
-    findByText(view.contentEl, 'Overview')?.click();
+    findByText(view.contentEl, '概览')?.click();
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
 
     expect(plugin.settings.defaultTab).toBe('overview');
     expect(view.contentEl.children[0]?.dataset.activeTab).toBe('overview');
     expect(load).toHaveBeenCalledOnce();
-    expect(obsidianMock.getActiveElement()?.text).toBe('Overview');
+    expect(obsidianMock.getActiveElement()?.text).toBe('概览');
   });
 
   it('keeps keyboard focus on the newly rendered active tab', async () => {
@@ -345,12 +367,12 @@ describe('CuriosityDashboardView', () => {
     const { saveSettings, view } = makeHarness(load);
     await view.refresh();
 
-    const event = findByText(view.contentEl, 'Tasks')?.keydown('ArrowRight');
+    const event = findByText(view.contentEl, '任务')?.keydown('ArrowRight');
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
 
     expect(event?.preventDefault).toHaveBeenCalledOnce();
     expect(view.contentEl.children[0]?.dataset.activeTab).toBe('data');
-    expect(obsidianMock.getActiveElement()?.text).toBe('Data');
+    expect(obsidianMock.getActiveElement()?.text).toBe('数据');
     expect(load).toHaveBeenCalledOnce();
   });
 
@@ -360,7 +382,7 @@ describe('CuriosityDashboardView', () => {
     await view.refresh();
     const shell = view.contentEl.children[0];
 
-    findByText(view.contentEl, 'Tasks')?.click();
+    findByText(view.contentEl, '任务')?.click();
     await Promise.resolve();
 
     expect(saveSettings).not.toHaveBeenCalled();
@@ -378,8 +400,8 @@ describe('CuriosityDashboardView', () => {
       .mockImplementationOnce(() => second.promise);
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Overview')?.click();
-    findByText(harness.view.contentEl, 'Data')?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
+    findByText(harness.view.contentEl, '数据')?.click();
     first.reject(new Error('first failed'));
     second.resolve();
     await vi.waitFor(() => expect(harness.saveSettings).toHaveBeenCalledTimes(2));
@@ -400,8 +422,8 @@ describe('CuriosityDashboardView', () => {
       .mockImplementationOnce(() => second.promise);
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Overview')?.click();
-    findByText(harness.view.contentEl, 'Data')?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
+    findByText(harness.view.contentEl, '数据')?.click();
     first.resolve();
     await first.promise;
     second.reject(new Error('second failed'));
@@ -409,7 +431,7 @@ describe('CuriosityDashboardView', () => {
     await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
 
     expect(harness.plugin.settings.defaultTab).toBe('overview');
-    expect(obsidianMock.getActiveElement()?.text).toBe('Overview');
+    expect(obsidianMock.getActiveElement()?.text).toBe('概览');
     expect(load).toHaveBeenCalledOnce();
   });
 
@@ -463,6 +485,7 @@ describe('CuriosityDashboardView', () => {
     await vi.waitFor(() => expect(modalMock.confirmAsk).toHaveBeenCalledWith(
       expect.anything(),
       '制作',
+      expect.anything(),
     ));
     await vi.waitFor(() => expect(harness.mutation.advanceStage).toHaveBeenCalledWith(
       '10-选题池/39.md',
@@ -485,7 +508,7 @@ describe('CuriosityDashboardView', () => {
     const harness = makeHarness(async () => value);
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    findByText(harness.view.contentEl, '灵感')?.parent?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     const defaults = modalMock.createAsk.mock.calls[0]?.[1] as {
       issue: number; targetPath: string; targetPathFor(issue: number, title: string): string;
@@ -534,7 +557,7 @@ describe('CuriosityDashboardView', () => {
         .mockResolvedValueOnce(reviewRequest);
       await harness.view.refresh();
 
-      findByText(harness.view.contentEl, 'Script')?.parent?.click();
+      findByText(harness.view.contentEl, '脚本')?.parent?.click();
       await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(1));
       expect(modalMock.createAsk.mock.calls[0]?.[1]).toMatchObject({
         issue: 39,
@@ -554,8 +577,8 @@ describe('CuriosityDashboardView', () => {
         false,
       ));
 
-      await vi.waitFor(() => expect(findByText(harness.view.contentEl, 'Review')).toBeDefined());
-      findByText(harness.view.contentEl, 'Review')?.parent?.click();
+      await vi.waitFor(() => expect(findDockLabel(harness.view.contentEl, '复盘')).toBeDefined());
+      findDockLabel(harness.view.contentEl, '复盘')?.parent?.click();
       await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(2));
       expect(modalMock.createAsk.mock.calls[1]?.[1]).toMatchObject({
         issue: 39,
@@ -591,7 +614,7 @@ describe('CuriosityDashboardView', () => {
     modalMock.createAsk.mockResolvedValueOnce(request);
     createFailure.templateCreate.mockRejectedValueOnce(new Error('target exists'));
     await createFailure.view.refresh();
-    findByText(createFailure.view.contentEl, 'Script')?.parent?.click();
+    findByText(createFailure.view.contentEl, '脚本')?.parent?.click();
     await vi.waitFor(() => expect(obsidianMock.notices).toContain('创建失败：target exists'));
     expect(createFailure.mutation.setAssociationPath).not.toHaveBeenCalled();
     expect(createFailure.openLinkText).not.toHaveBeenCalled();
@@ -602,7 +625,7 @@ describe('CuriosityDashboardView', () => {
     partial.mutation.setAssociationPath.mockRejectedValueOnce(new Error('concurrent association'));
     partial.openLinkText.mockRejectedValueOnce(new Error('open failed'));
     await partial.view.refresh();
-    findByText(partial.view.contentEl, 'Script')?.parent?.click();
+    findByText(partial.view.contentEl, '脚本')?.parent?.click();
     await vi.waitFor(() => expect(obsidianMock.notices.some((message) =>
       message.includes('文件已创建，但关联失败') && message.includes('无法打开'))).toBe(true));
   });
@@ -620,7 +643,7 @@ describe('CuriosityDashboardView', () => {
     }));
     await harness.view.refresh();
 
-    const cancelledScript = findByText(harness.view.contentEl, 'Script')?.parent;
+    const cancelledScript = findByText(harness.view.contentEl, '脚本')?.parent;
     cancelledScript?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     expect(harness.templateCreate).not.toHaveBeenCalled();
@@ -636,7 +659,7 @@ describe('CuriosityDashboardView', () => {
     harness.templateCreate.mockImplementationOnce(() => new Promise<string>((resolve) => {
       finishCreate = () => resolve('60-发布复盘/第39期-首页-综合复盘.md');
     }));
-    const review = findByText(harness.view.contentEl, 'Review')?.parent;
+    const review = findDockLabel(harness.view.contentEl, '复盘')?.parent;
     review?.click();
     review?.click();
     await vi.waitFor(() => expect(harness.templateCreate).toHaveBeenCalledOnce());
@@ -668,7 +691,7 @@ describe('CuriosityDashboardView', () => {
     modalMock.createAsk.mockResolvedValueOnce(request);
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
 
     await vi.waitFor(() => expect(obsidianMock.notices).toContain(
       '文件已创建并关联，但无法刷新 Dashboard：refresh failed',
@@ -695,7 +718,7 @@ describe('CuriosityDashboardView', () => {
     });
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
 
     await vi.waitFor(() => expect(harness.mutation.setAssociationPath).toHaveBeenCalledWith(
       topic.path,
@@ -733,7 +756,7 @@ describe('CuriosityDashboardView', () => {
     });
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
 
     await vi.waitFor(() => expect(obsidianMock.notices.some((notice) =>
       notice.includes('文件已创建') && notice.includes('当前作品已变化，文件未关联'))).toBe(true));
@@ -766,7 +789,7 @@ describe('CuriosityDashboardView', () => {
     });
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
 
     await vi.waitFor(() => expect(obsidianMock.notices.some((notice) =>
       notice.includes('无法核对当前作品：vault changed') && notice.includes('文件已创建'))).toBe(true));
@@ -785,7 +808,7 @@ describe('CuriosityDashboardView', () => {
     harness.templateCreate.mockRejectedValueOnce(new TemplateNotFoundError('missing.md'));
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    findByText(harness.view.contentEl, '灵感')?.parent?.click();
 
     await vi.waitFor(() => expect(harness.setting.open).toHaveBeenCalledOnce());
     expect(harness.setting.openTabById).toHaveBeenCalledWith('curiosity-dashboard');
@@ -805,7 +828,7 @@ describe('CuriosityDashboardView', () => {
     harness.setting.open = undefined as never;
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    findByText(harness.view.contentEl, '灵感')?.parent?.click();
 
     await vi.waitFor(() => expect(obsidianMock.notices).toEqual([
       '创建失败：模板缺失且无法自动打开，请手动打开设置：missing.md。',
@@ -910,30 +933,30 @@ describe('CuriosityDashboardView', () => {
     });
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(4));
 
     expect(obsidianMock.notices).toEqual([]);
-    expect(findByText(harness.view.contentEl, 'Chase your curiosity')).toBeDefined();
+    expect(findByText(harness.view.contentEl, '追逐你的好奇心')).toBeDefined();
     expect(findByText(harness.view.contentEl, '尚未设置当前作品。')).toBeUndefined();
   });
 
   it('coalesces Quick Actions and Dock creation into one modal and allows retry after settlement', async () => {
     const harness = makeHarness(async () => model);
     await harness.view.refresh();
-    findByText(harness.view.contentEl, 'Overview')?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
     await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
     let closeModal!: (value: unknown) => void;
     modalMock.createAsk.mockImplementationOnce(() => new Promise((resolve) => { closeModal = resolve; }));
 
     findByText(harness.view.contentEl, '创建选题卡')?.click();
-    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    findByText(harness.view.contentEl, '灵感')?.parent?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     closeModal(null);
     await Promise.resolve();
     await Promise.resolve();
 
-    findByText(harness.view.contentEl, 'Ideas')?.parent?.click();
+    findByText(harness.view.contentEl, '灵感')?.parent?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(2));
   });
 
@@ -969,7 +992,7 @@ describe('CuriosityDashboardView', () => {
     modalMock.createAsk.mockImplementationOnce(() => new Promise((resolve) => { confirm = resolve; }));
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, 'Script')?.parent?.click();
+    findByText(harness.view.contentEl, '脚本')?.parent?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     current = { ...model, focus: { kind: 'ready', topic: newTopic } };
     await harness.view.refresh();

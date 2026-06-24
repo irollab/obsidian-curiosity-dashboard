@@ -1,11 +1,12 @@
 import { type App, Modal, Setting } from 'obsidian';
 
 import { nextStage, type Stage } from '@/domain/stages';
+import type { Translator } from '@/i18n/translator';
 
 export class ConfirmStageModal extends Modal {
-  static ask(app: App, current: Stage): Promise<boolean> {
+  static ask(app: App, current: Stage, t: Translator): Promise<boolean> {
     return new Promise((resolve) => {
-      new ConfirmStageModal(app, current, resolve).open();
+      new ConfirmStageModal(app, current, resolve, t).open();
     });
   }
 
@@ -15,6 +16,7 @@ export class ConfirmStageModal extends Modal {
     app: App,
     private readonly current: Stage,
     private readonly resolveResult: (value: boolean) => void,
+    private readonly t: Translator,
   ) {
     super(app);
   }
@@ -25,19 +27,22 @@ export class ConfirmStageModal extends Modal {
     this.modalEl.addClass('curiosity-modal', 'curiosity-modal--confirm');
     this.contentEl.addClass('curiosity-modal-content');
     this.modalEl.setAttribute('aria-labelledby', titleId);
-    this.contentEl.createEl('h2', { text: '推进制作阶段', attr: { id: titleId } });
+    this.contentEl.createEl('h2', { text: this.t.t('confirmStage.title'), attr: { id: titleId } });
     this.contentEl.createEl('p', {
       text: next === null
-        ? '当前已经是最终阶段。'
-        : `从「${this.current}」推进到「${next}」？`,
+        ? this.t.t('confirmStage.terminal')
+        : this.t.t('confirmStage.prompt', {
+            from: this.t.stageLabel(this.current),
+            to: this.t.stageLabel(next),
+          }),
     });
     new Setting(this.contentEl)
       .addButton((button) =>
-        button.setButtonText('取消').onClick(() => this.finish(false)))
+        button.setButtonText(this.t.t('common.cancel')).onClick(() => this.finish(false)))
       .addButton((button) =>
         button
           .setCta()
-          .setButtonText('推进')
+          .setButtonText(this.t.t('confirmStage.confirm'))
           .setDisabled(next === null)
           .onClick(() => this.finish(next !== null)));
   }

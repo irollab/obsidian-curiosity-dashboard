@@ -1,6 +1,7 @@
 import { setIcon } from 'obsidian';
 
 import type { DashboardModel, TopicRecord } from '@/domain/models';
+import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
@@ -16,25 +17,30 @@ export function renderDock(
   parent: HTMLElement,
   model: DashboardModel,
   handlers: DashboardHandlers,
+  t: Translator,
 ): void {
   const dock = parent.createEl('nav', {
     cls: 'curiosity-dock',
-    attr: { 'aria-label': 'Dashboard shortcuts' },
+    attr: { 'aria-label': t.t('dock.aria') },
   });
   const topic = focusTopic(model);
   const items: DockItem[] = [];
 
   items.push(model.mobileReadOnly
-    ? disabledItem('Ideas', 'lightbulb', '移动端只读，不能创建选题卡')
-    : { action: handlers.createTopic, icon: 'lightbulb', label: 'Ideas' });
-  items.push(fileItem('Mission', 'crosshair', topic?.path ?? null, '未设置当前作品', handlers));
-  items.push({ action: () => handlers.selectTab('tasks'), icon: 'list-checks', label: 'Tasks' });
-  items.push(associatedItem('Script', 'file-text', topic, 'scriptPath', model, handlers));
-  items.push({ action: () => handlers.selectTab('data'), icon: 'chart-no-axes-combined', label: 'Data' });
-  items.push(associatedItem('Review', 'clipboard-check', topic, 'reviewPath', model, handlers));
-  items.push({ action: handlers.openSettings, icon: 'settings', label: 'Settings' });
+    ? disabledItem(t.t('dock.ideas'), 'lightbulb', t.t('dock.reason.mobileCreateTopic'))
+    : { action: handlers.createTopic, icon: 'lightbulb', label: t.t('dock.ideas') });
+  items.push(fileItem(t.t('dock.mission'), 'crosshair', topic?.path ?? null, t.t('dock.reason.noFocus'), handlers));
+  items.push({ action: () => handlers.selectTab('tasks'), icon: 'list-checks', label: t.t('dock.tasks') });
+  items.push(associatedItem(
+    { key: 'script', label: t.t('dock.script') }, 'file-text', topic, 'scriptPath', model, handlers, t,
+  ));
+  items.push({ action: () => handlers.selectTab('data'), icon: 'chart-no-axes-combined', label: t.t('dock.data') });
+  items.push(associatedItem(
+    { key: 'review', label: t.t('dock.review') }, 'clipboard-check', topic, 'reviewPath', model, handlers, t,
+  ));
+  items.push({ action: handlers.openSettings, icon: 'settings', label: t.t('dock.settings') });
 
-  for (const item of items) renderDockItem(dock, item);
+  for (const item of items) renderDockItem(dock, item, t);
 }
 
 function focusTopic(model: DashboardModel): TopicRecord | null {
@@ -56,37 +62,44 @@ function fileItem(
 }
 
 function associatedItem(
-  label: 'Script' | 'Review',
+  meta: { key: 'script' | 'review'; label: string },
   icon: string,
   topic: TopicRecord | null,
   field: 'scriptPath' | 'reviewPath',
   model: DashboardModel,
   handlers: DashboardHandlers,
+  t: Translator,
 ): DockItem {
   const path = topic?.[field] ?? null;
-  if (path !== null) return fileItem(label, icon, path, '', handlers);
+  if (path !== null) return fileItem(meta.label, icon, path, '', handlers);
 
-  const create = label === 'Script' ? handlers.createScript : handlers.createReview;
+  const what = meta.key === 'script' ? t.t('link.script') : t.t('link.review');
+  const create = meta.key === 'script' ? handlers.createScript : handlers.createReview;
   if (topic !== null) {
     if (model.mobileReadOnly) {
-      return disabledItem(label, icon, `移动端只读，不能创建${label === 'Script' ? '脚本' : '复盘'}`);
+      return disabledItem(meta.label, icon, t.t('dock.reason.mobileCreate', { what }));
     }
-    return { action: () => create(topic), icon, label };
+    return { action: () => create(topic), icon, label: meta.label };
   }
-  return disabledItem(label, icon, `当前作品未关联${label === 'Script' ? '脚本' : '复盘'}`);
+  return disabledItem(meta.label, icon, t.t('dock.reason.notLinked', { what }));
 }
 
 function disabledItem(label: string, icon: string, reason: string): DockItem {
   return { icon, label, reason };
 }
 
-function renderDockItem(parent: HTMLElement, item: DockItem): void {
+function renderDockItem(parent: HTMLElement, item: DockItem, t: Translator): void {
   const disabled = item.action === undefined;
   const button = parent.createEl('button', {
     cls: 'curiosity-dock-item',
     type: 'button',
     attr: {
-      'aria-label': disabled ? `${item.label}（不可用：${item.reason ?? '未知原因'}）` : item.label,
+      'aria-label': disabled
+        ? t.t('common.unavailableReason', {
+            label: item.label,
+            reason: item.reason ?? t.t('common.unknownReason'),
+          })
+        : item.label,
     },
   });
   button.disabled = disabled;

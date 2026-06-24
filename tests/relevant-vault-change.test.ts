@@ -18,6 +18,7 @@ const settings = {
   openOnStartup: false,
   defaultTab: 'overview' as const,
   enableMobileView: true,
+  language: 'auto' as const,
 };
 
 function relevant(change: VaultChange, observed: Iterable<string> = []): boolean {

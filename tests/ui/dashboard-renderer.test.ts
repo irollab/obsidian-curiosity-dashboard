@@ -7,6 +7,7 @@ vi.mock('obsidian', () => ({
 }));
 
 import type { DashboardModel, TopicRecord } from '@/domain/models';
+import { createTranslator } from '@/i18n/translator';
 import { DashboardRenderer, type DashboardHandlers } from '@/ui/dashboard-renderer';
 
 import { FakeElement, fakeDocument, findAll, findByText } from '../support/fake-dom';
@@ -60,7 +61,9 @@ function handlers(): DashboardHandlers {
 function render(value: DashboardModel, activeTab: 'overview' | 'tasks' | 'data' = 'overview') {
   const root = new FakeElement();
   const actions = handlers();
-  new DashboardRenderer().render(root as unknown as HTMLElement, value, actions, activeTab);
+  new DashboardRenderer().render(
+    root as unknown as HTMLElement, value, actions, activeTab, createTranslator('zh'),
+  );
   return { root, actions };
 }
 
@@ -69,14 +72,51 @@ describe('DashboardRenderer', () => {
     const { root } = render(model({ backgroundUrl: 'app://vault/space");color:red).png' }));
     const hero = findAll(root, (element) => element.classList.has('curiosity-hero'))[0];
 
-    expect(findByText(root, 'Chase your curiosity')).toBeDefined();
-    expect(findByText(root, 'ISSUE 39')).toBeDefined();
+    expect(findByText(root, '追逐你的好奇心')).toBeDefined();
+    expect(findByText(root, '第 39 期')).toBeDefined();
     expect(findByText(root, topic.title)).toBeDefined();
     expect(findByText(root, '制作')).toBeDefined();
     expect(findByText(root, '确认视觉结构')).toBeDefined();
     expect(hero?.style.getPropertyValue('--curiosity-background')).toBe(
       'url("app://vault/space%22%29;color:red%29.png")',
     );
+  });
+
+  it('opens the current script or creates one without conflating it with the topic card', () => {
+    const existing = render(model());
+
+    findByText(existing.root, '打开当前脚本')?.click();
+    findByText(existing.root, '查看选题卡')?.click();
+    expect(existing.actions.openPath).toHaveBeenNthCalledWith(1, topic.scriptPath);
+    expect(existing.actions.openPath).toHaveBeenNthCalledWith(2, topic.path);
+    expect(existing.actions.createScript).not.toHaveBeenCalled();
+
+    const topicWithoutScript = { ...topic, scriptPath: null, stage: '制作' as const };
+    const missing = render(model({
+      focus: { kind: 'ready', topic: topicWithoutScript },
+    }));
+
+    expect(findByText(missing.root, '打开当前作品')).toBeUndefined();
+    findByText(missing.root, '创建脚本')?.click();
+    findByText(missing.root, '查看选题卡')?.click();
+    expect(missing.actions.createScript).toHaveBeenCalledWith(topicWithoutScript);
+    expect(missing.actions.openPath).toHaveBeenCalledOnce();
+    expect(missing.actions.openPath).toHaveBeenCalledWith(topic.path);
+  });
+
+  it('disables Hero script creation in mobile read-only mode', () => {
+    const topicWithoutScript = { ...topic, scriptPath: null, stage: '制作' as const };
+    const { root, actions } = render(model({
+      focus: { kind: 'ready', topic: topicWithoutScript },
+      mobileReadOnly: true,
+    }));
+    const createScript = findByText(root, '创建脚本');
+
+    expect(createScript?.disabled).toBe(true);
+    expect(createScript?.getAttr('title')).toBe('移动端只读，不能创建脚本');
+    expect(createScript?.getAttr('aria-label')).toBe('创建脚本（不可用：移动端只读）');
+    createScript?.click();
+    expect(actions.createScript).not.toHaveBeenCalled();
   });
 
   it('renders none, multiple, and invalid-stage focus states explicitly', () => {
@@ -87,6 +127,7 @@ describe('DashboardRenderer', () => {
       model({ focus: { kind: 'none' }, tasks: [] }),
       noneActions,
       'overview',
+      createTranslator('zh'),
     );
     findByText(noneRoot, '打开插件设置')?.click();
     expect(noneActions.openSettings).toHaveBeenCalledOnce();
@@ -110,7 +151,7 @@ describe('DashboardRenderer', () => {
   it('uses semantic tabs and arrow keys to select the adjacent tab', () => {
     const { root, actions } = render(model(), 'tasks');
     const tabs = findAll(root, (element) => element.getAttr('role') === 'tab');
-    const tasks = tabs.find((element) => element.text === 'Tasks');
+    const tasks = tabs.find((element) => element.text === '任务');
 
     expect(tabs).toHaveLength(3);
     expect(tasks?.tag).toBe('button');
@@ -119,7 +160,7 @@ describe('DashboardRenderer', () => {
     expect(tasks?.getAttr('tabindex')).toBe('0');
     const event = tasks?.keydown('ArrowRight');
     expect(event?.defaultPrevented).toBe(true);
-    expect(fakeDocument.activeElement?.text).toBe('Data');
+    expect(fakeDocument.activeElement?.text).toBe('数据');
     expect(actions.selectTab).toHaveBeenCalledWith('data');
   });
 
@@ -134,8 +175,8 @@ describe('DashboardRenderer', () => {
       'curiosity-panel-data',
     ]);
     expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
-    expect(findByText(panels[1]!, 'Mission Control')).toBeDefined();
-    expect(findByText(panels[0]!, 'Mission Control')).toBeUndefined();
+    expect(findByText(panels[1]!, '任务中心')).toBeDefined();
+    expect(findByText(panels[0]!, '任务中心')).toBeUndefined();
   });
 
   it('passes the full task snapshot and explicit paths to handlers', () => {
@@ -241,7 +282,7 @@ describe('DashboardRenderer', () => {
 
   it('includes the topic title in the Mission titlebar', () => {
     const { root } = render(model());
-    expect(findByText(root, `Issue 39 — ${topic.title}`)).toBeDefined();
+    expect(findByText(root, `第 39 期 — ${topic.title}`)).toBeDefined();
   });
 
   it('keeps the data tab structurally valid without inventing metrics', () => {
@@ -249,7 +290,7 @@ describe('DashboardRenderer', () => {
     const panel = findAll(root, (element) => element.getAttr('role') === 'tabpanel')[0];
 
     expect(panel).toBeDefined();
-    expect(findByText(root, 'Mission Control')).toBeUndefined();
+    expect(findByText(root, '任务中心')).toBeUndefined();
     expect(findByText(root, '0')).toBeUndefined();
   });
 });
