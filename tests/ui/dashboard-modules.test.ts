@@ -8,6 +8,7 @@ vi.mock('obsidian', () => ({
 }));
 
 import type { DashboardModel, TopicRecord } from '@/domain/models';
+import type { WorkflowAction } from '@/domain/workflow';
 import { createTranslator } from '@/i18n/translator';
 import {
   DashboardRenderer,
@@ -39,12 +40,17 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     backgroundUrl: null,
     commentEvidence: [],
     focus: { kind: 'ready', topic: { ...topic, stage: '制作' } },
+    focusCandidates: [],
+    pickableTopics: [],
     metrics: [],
     mobileReadOnly: false,
     queue: [],
     reviewPath: null,
     tasks: [],
     thisWeek: [],
+    workflowActions: [],
+    promptTemplatesPresent: false,
+    promptTemplatesSkipped: [],
     ...overrides,
   };
 }
@@ -52,13 +58,18 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
 function handlers(): DashboardHandlers {
   return {
     confirmAdvance: vi.fn(async () => undefined),
+    copyPrompt: vi.fn(async () => undefined),
     createReview: vi.fn(async () => undefined),
     createScript: vi.fn(async () => undefined),
     createTopic: vi.fn(async () => undefined),
+    openOutput: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
     openSettings: vi.fn(),
+    seedPromptTemplates: vi.fn(async () => undefined),
     selectTab: vi.fn(async () => undefined),
     setAssociation: vi.fn(async () => undefined),
+    switchFocus: vi.fn(async () => undefined),
+    openWorkPicker: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
   };
 }
@@ -114,6 +125,27 @@ describe('dashboard secondary modules', () => {
     expect(headings).toEqual(expected);
     expect(findAll(activePanel!, (element) => element.classList.has('curiosity-dock'))).toHaveLength(0);
     expect(findAll(root, (element) => element.classList.has('curiosity-dock'))).toHaveLength(1);
+  });
+
+  it('shows a weekly progress summary when no due-dated topics exist', () => {
+    const { root } = render(model({
+      focus: { kind: 'ready', topic: { ...topic, stage: '制作' } },
+      tasks: [
+        { checked: true, line: 1, text: 'a' },
+        { checked: false, line: 2, text: 'b' },
+      ],
+      queue: [topicAt(0), topicAt(1)],
+      thisWeek: [],
+    }), 'tasks');
+    const week = section(root, '本周');
+
+    expect(findByText(week, '本周暂无已设置截止日期的作品。')).toBeDefined();
+    expect(findByText(week, '阶段进度')).toBeDefined();
+    expect(findByText(week, '制作 · 3/5')).toBeDefined();
+    expect(findByText(week, '清单完成')).toBeDefined();
+    expect(findByText(week, '1/2')).toBeDefined();
+    expect(findByText(week, '队列待办')).toBeDefined();
+    expect(findByText(week, '2 项')).toBeDefined();
   });
 
   it('limits long week and queue collections and reports every omitted item', () => {
@@ -282,7 +314,7 @@ describe('dashboard secondary modules', () => {
   });
 
   it.each([
-    ['作品', 'openPath'],
+    ['作品', 'openWorkPicker'],
     ['任务', 'selectTab'],
     ['数据', 'selectTab'],
   ] as const)('keeps the Dock %s action guarded until its handler promise settles', async (label, handler) => {
@@ -331,7 +363,7 @@ describe('dashboard secondary modules', () => {
       button?.click();
     }
     expect(actions.createTopic).toHaveBeenCalledOnce();
-    expect(actions.openPath).toHaveBeenCalledWith(current.path);
+    expect(actions.openWorkPicker).toHaveBeenCalledOnce();
     expect(actions.openPath).toHaveBeenCalledWith(current.scriptPath);
     expect(actions.openPath).toHaveBeenCalledWith(current.reviewPath);
     expect(actions.selectTab).toHaveBeenCalledWith('tasks');
@@ -344,14 +376,14 @@ describe('dashboard secondary modules', () => {
     const { root } = render(model({ focus: { kind: 'none' } }), 'overview', actions);
     const dock = findAll(root, (element) => element.classList.has('curiosity-dock'))[0]!;
 
-    for (const label of ['作品', '脚本', '复盘']) {
+    for (const label of ['脚本', '复盘']) {
       const button = findByText(dock, label)?.parent;
       expect(button?.disabled).toBe(true);
       expect(button?.getAttr('aria-label')).toContain('不可用');
     }
-    expect(findByText(dock, '未设置当前作品')).toBeDefined();
     expect(findByText(dock, '当前作品未关联脚本')).toBeDefined();
     expect(findByText(dock, '当前作品未关联复盘')).toBeDefined();
+    expect(findByText(dock, '作品')?.parent?.disabled).toBe(false);
     expect(findByText(dock, '任务')?.parent?.disabled).toBe(false);
     expect(findByText(dock, '数据')?.parent?.disabled).toBe(false);
     expect(findByText(dock, '设置')?.parent?.disabled).toBe(false);
@@ -370,5 +402,101 @@ describe('dashboard secondary modules', () => {
     const buttons = secondary.flatMap((area) => findAll(area, (element) => element.tag === 'button'));
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every((button) => button.type === 'button')).toBe(true);
+  });
+});
+
+describe('hero focus switcher', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders a chip for each other active topic and switches focus on click', () => {
+    const candidate = {
+      path: '10-选题池/40-topic.md',
+      issue: 40,
+      title: 'Topic 1',
+      stage: '制作' as const,
+      isActive: false,
+    };
+    const actions = handlers();
+    const { root } = render(model({ focusCandidates: [candidate] }), 'overview', actions);
+
+    expect(findByText(root, '切换当前作品')).toBeDefined();
+    expect(findByText(root, '第 40 期 · Topic 1')).toBeDefined();
+    const chip = findAll(root, (element) => element.classList.has('curiosity-focus-chip'))[0];
+    chip?.click();
+
+    expect(actions.switchFocus).toHaveBeenCalledWith('10-选题池/40-topic.md');
+  });
+
+  it('omits the switcher when no other active topic exists', () => {
+    const { root } = render(model({ focusCandidates: [] }), 'overview');
+    expect(findByText(root, '切换当前作品')).toBeUndefined();
+  });
+
+  it('disables focus chips in mobile read-only mode', () => {
+    const candidate = {
+      path: '10-选题池/40-topic.md',
+      issue: 40,
+      title: 'Topic 1',
+      stage: '制作' as const,
+      isActive: false,
+    };
+    const actions = handlers();
+    const { root } = render(
+      model({ focusCandidates: [candidate], mobileReadOnly: true }),
+      'overview',
+      actions,
+    );
+    const chip = findAll(root, (element) => element.classList.has('curiosity-focus-chip'))[0];
+    expect(chip?.disabled).toBe(true);
+    chip?.click();
+    expect(actions.switchFocus).not.toHaveBeenCalled();
+  });
+});
+
+describe('workflow deck tab', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const evalAction: WorkflowAction = {
+    id: 'eval', label: '批量评估', description: '给结论不改文件', group: '选题', order: 2,
+    needsFocus: false, output: null, body: '评估 {{inbox_dir}}', sourcePath: 'x.md',
+  };
+  const scriptAction: WorkflowAction = {
+    id: 'gen-script', label: '从选题生成脚本大纲', description: '', group: '策划', order: 1,
+    needsFocus: true, output: '40-脚本大纲/草稿', body: '基于 {{focus_topic}}', sourcePath: 'y.md',
+  };
+
+  it('工作流 tab 渲染分组与按钮', () => {
+    const root = new FakeElement();
+    const actions = handlers();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ workflowActions: [evalAction, scriptAction], promptTemplatesPresent: true, focus: { kind: 'none' } }),
+      actions, 'workflow' as DashboardTab, createTranslator('zh'),
+    );
+    expect(findByText(root, '批量评估')).not.toBeNull();
+    expect(findByText(root, '从选题生成脚本大纲')).not.toBeNull();
+    // 只读类（output=null）不渲染"打开输出位置"
+    expect(findAll(root, (element) => element.tag === 'button' && element.text === '打开输出位置')).toHaveLength(1);
+  });
+
+  it('needs_focus 但无焦点时复制按钮禁用', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ workflowActions: [scriptAction], promptTemplatesPresent: true, focus: { kind: 'none' } }),
+      handlers(), 'workflow' as DashboardTab, createTranslator('zh'),
+    );
+    const copy = findAll(root, (element) => element.tag === 'button' && element.text === '复制提示词')[0];
+    expect(copy?.disabled).toBe(true);
+  });
+
+  it('无模板时渲染种子按钮', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ workflowActions: [], promptTemplatesPresent: false }),
+      handlers(), 'workflow' as DashboardTab, createTranslator('zh'),
+    );
+    expect(findByText(root, '生成默认提示词模板')).not.toBeNull();
   });
 });

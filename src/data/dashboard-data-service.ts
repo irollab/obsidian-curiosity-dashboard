@@ -5,6 +5,7 @@ import type { DashboardSettings } from '@/settings';
 
 import { AssociationResolver } from './association-resolver';
 import { resolveFocus } from './focus-resolver';
+import { PromptTemplateRepository } from './prompt-template-repository';
 import { ReviewMetricsService } from './review-metrics-service';
 import { TopicRepository } from './topic-repository';
 
@@ -47,6 +48,7 @@ export class DashboardDataService {
 
     const focus = resolveAssociations(resolveFocus(topics.all()), resolver);
     const focusTopic = topicFromFocus(focus);
+    const focusPath = focusTopic?.path ?? null;
     const associationCandidates =
       focusTopic === null
         ? emptyAssociationCandidates()
@@ -71,9 +73,15 @@ export class DashboardDataService {
     const review = await reviewService.load(focusTopic?.reviewPath ?? null);
     const backgroundUrl =
       settings.backgroundPath.length === 0 ? null : vault.resourceUrl(settings.backgroundPath);
+    const promptRepo = await PromptTemplateRepository.load(vault, settings.promptDir);
 
     return {
       focus,
+      focusCandidates: topics.focusCandidates(
+        focusPath,
+        settings.focusHistory.map((entry) => entry.path),
+      ),
+      pickableTopics: topics.pickableTopics(),
       tasks,
       thisWeek: topics.thisWeek(),
       queue: topics.productionQueue(),
@@ -83,6 +91,9 @@ export class DashboardDataService {
       backgroundUrl,
       mobileReadOnly,
       associationCandidates,
+      workflowActions: promptRepo.all(),
+      promptTemplatesPresent: promptRepo.present(),
+      promptTemplatesSkipped: promptRepo.skipped(),
     };
   }
 }

@@ -171,4 +171,42 @@ describe('TopicRepository', () => {
 
     expect(issues).toEqual([1, 2]);
   });
+
+  it('builds focus candidates from active topics, current focus first then issue desc', () => {
+    const vault = new FakeVaultGateway();
+    addTopic(vault, '10-选题池/1-A.md', { type: '选题', issue: 1, stage: '策划' });
+    addTopic(vault, '10-选题池/2-B.md', {
+      type: '选题', issue: 2, stage: '制作', homepage_focus: true,
+    });
+    addTopic(vault, '10-选题池/3-C.md', { type: '选题', issue: 3, stage: '复盘' });
+    addTopic(vault, '10-选题池/4-D.md', { type: '选题', issue: 4 });
+    addTopic(vault, '10-选题池/5-E.md', { type: '选题', issue: 5, stage: '发布' });
+
+    const candidates = new TopicRepository(vault, '10-选题池')
+      .focusCandidates('10-选题池/2-B.md');
+
+    expect(candidates).toEqual([
+      { path: '10-选题池/2-B.md', issue: 2, title: 'B', stage: '制作', isActive: true },
+      { path: '10-选题池/5-E.md', issue: 5, title: 'E', stage: '发布', isActive: false },
+      { path: '10-选题池/1-A.md', issue: 1, title: 'A', stage: '策划', isActive: false },
+    ]);
+  });
+
+  it('orders focus candidates by recency before issue when recent paths are given', () => {
+    const vault = new FakeVaultGateway();
+    addTopic(vault, '10-选题池/1-A.md', { type: '选题', issue: 1, stage: '制作' });
+    addTopic(vault, '10-选题池/2-B.md', { type: '选题', issue: 2, stage: '制作' });
+    addTopic(vault, '10-选题池/3-C.md', { type: '选题', issue: 3, stage: '制作' });
+
+    // recentPaths 最近在前：B、A；C 从未用过，排最后
+    const paths = new TopicRepository(vault, '10-选题池')
+      .focusCandidates(null, ['10-选题池/2-B.md', '10-选题池/1-A.md'])
+      .map((candidate) => candidate.path);
+
+    expect(paths).toEqual([
+      '10-选题池/2-B.md',
+      '10-选题池/1-A.md',
+      '10-选题池/3-C.md',
+    ]);
+  });
 });

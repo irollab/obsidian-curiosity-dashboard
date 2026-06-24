@@ -1,8 +1,10 @@
-import { ItemView, Notice, Platform, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, Platform, TFile, TFolder, type WorkspaceLeaf } from 'obsidian';
 
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
+import type { WorkflowAction } from '@/domain/workflow';
 import type { TranslationKey } from '@/i18n/translations';
 import type { Translator } from '@/i18n/translator';
+import { buildPrompt } from '@/mutations/prompt-builder-service';
 import {
   sanitizeTitle,
   TemplateNotFoundError,
@@ -13,6 +15,7 @@ import type { DashboardSettings } from '@/settings';
 import { DashboardRenderer, type AssociationField } from '@/ui/dashboard-renderer';
 import { ConfirmStageModal } from '@/ui/confirm-stage-modal';
 import { CreateFileModal, type CreateFileDefaults } from '@/ui/create-file-modal';
+import { WorkPickerModal } from '@/ui/work-picker-modal';
 
 import type CuriosityDashboardPlugin from './main';
 import { DASHBOARD_VIEW_TYPE } from './constants';
@@ -113,9 +116,14 @@ export class CuriosityDashboardView extends ItemView {
       selectTab: (tab) => this.selectTab(tab),
       setAssociation: (topicPath, field, value) =>
         this.setAssociation(topicPath, field, value),
+      switchFocus: (path) => this.switchFocus(path),
+      openWorkPicker: () => this.openWorkPicker(),
       createTopic: () => this.runCreate('topic', null),
       createScript: (topic) => this.runCreate('script', topic),
       createReview: (topic) => this.runCreate('review', topic),
+      copyPrompt: (action) => this.copyPrompt(action),
+      openOutput: (path) => this.openOutput(path),
+      seedPromptTemplates: () => this.seedPromptTemplates(),
     }, this.activeTab, this.t);
     this.plugin.updateObservedDataPaths(observedReviewPaths(model));
     if (focusActiveTab) activeButton.focus();
@@ -296,12 +304,12 @@ export class CuriosityDashboardView extends ItemView {
       const filename = kind === 'topic'
         ? `${valueIssue}-${safeTitle}.md`
         : kind === 'script'
-          ? `${valueIssue}-${safeTitle}成稿.md`
+          ? `${valueIssue}-${safeTitle}脚本大纲.md`
           : `第${valueIssue}期-${safeTitle}-综合复盘.md`;
       const directory = kind === 'topic'
-        ? settings.topicDir
+        ? settings.topicInboxDir
         : kind === 'script'
-          ? settings.scriptDir
+          ? settings.scriptDraftDir
           : settings.reviewDir;
       return joinVaultPath(directory, filename);
     };
@@ -399,6 +407,101 @@ export class CuriosityDashboardView extends ItemView {
       await this.refresh();
     } catch (error) {
       this.showActionError('view.saveAssociationFailed', error);
+    }
+  }
+
+  private async switchFocus(targetPath: string): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    if (this.lastModel === null) return;
+    const fromPath = currentFocusTopic(this.lastModel)?.path ?? null;
+    if (fromPath === targetPath) return;
+    try {
+      await this.plugin.mutationService().switchHomepageFocus(fromPath, targetPath);
+      this.plugin.recordFocusSwitch(targetPath);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('view.switchFocusFailed', error);
+    }
+  }
+
+  private async openWorkPicker(): Promise<void> {
+    if (this.lastModel === null) return;
+    const target = await WorkPickerModal.ask(
+      this.app,
+      this.lastModel.pickableTopics,
+      currentFocusTopic(this.lastModel)?.path ?? null,
+      this.t,
+    );
+    if (target === null) return;
+    await this.switchFocus(target);
+  }
+
+  private async copyPrompt(action: WorkflowAction): Promise<void> {
+    if (this.lastModel === null) {
+      new Notice(this.t.t('view.notLoadedCreate'));
+      return;
+    }
+    const result = buildPrompt(action, this.lastModel, this.plugin.settings);
+    try {
+      await navigator.clipboard.writeText(result.text);
+      new Notice(this.t.t('workflow.copied', {
+        label: result.label, output: result.output ?? this.t.t('workflow.readonlyOutput'),
+      }));
+    } catch {
+      // 回退：写入临时文件并打开
+      const tempPath = `${this.plugin.settings.promptDir}/_临时-${Date.now()}.md`;
+      try {
+        await this.plugin.gateway.create(tempPath, result.text);
+        await this.app.workspace.openLinkText(tempPath, '', false);
+        new Notice(this.t.t('workflow.copyFailed', { path: tempPath }));
+      } catch (error) {
+        this.showActionError('view.createFailed', error);
+      }
+    }
+  }
+
+  private async openOutput(path: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      await this.openPath(path);
+      return;
+    }
+    if (file instanceof TFolder) {
+      const revealed = this.revealFolder(file);
+      if (!revealed) new Notice(this.t.t('workflow.outputMissing'));
+      return;
+    }
+    new Notice(this.t.t('workflow.outputMissing'));
+  }
+
+  private revealFolder(folder: TFolder): boolean {
+    try {
+      const explorer = (this.app as typeof this.app & {
+        internalPlugins?: { getPluginById?: (id: string) => { instance?: { revealInFolder?: (f: unknown) => void } } | null };
+      }).internalPlugins?.getPluginById?.('file-explorer');
+      const instance = explorer?.instance;
+      const reveal = instance?.revealInFolder;
+      if (typeof reveal !== 'function') return false;
+      reveal.call(instance, folder);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async seedPromptTemplates(): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    try {
+      const dir = this.plugin.settings.promptDir;
+      if (this.app.vault.getAbstractFileByPath(dir) === null) {
+        await this.app.vault.createFolder(dir);
+      }
+      await this.plugin.promptSeedService().seed(dir);
+      new Notice(this.t.t('workflow.seeded', { dir }));
+      await this.refresh();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : this.t.t('common.unknownError');
+      new Notice(this.t.t('workflow.seedFailed', { detail }));
     }
   }
 

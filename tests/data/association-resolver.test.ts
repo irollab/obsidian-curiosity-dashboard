@@ -7,17 +7,21 @@ import { FakeVaultGateway } from '../support/fake-vault-gateway';
 
 const settings: DashboardSettings = {
   topicDir: '10-选题池',
+  topicInboxDir: '10-选题池/待评估',
   scriptDir: '40-脚本大纲',
+  scriptDraftDir: '40-脚本大纲/草稿',
   assetDir: '20-素材库',
   reviewDir: '60-发布复盘',
   topicTemplate: '99-模板/选题卡模板.md',
   scriptTemplate: '99-模板/脚本大纲模板.md',
   reviewTemplate: '99-模板/发布复盘模板.md',
+  promptDir: '99-模板/codex-提示词',
   backgroundPath: '',
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
   language: 'auto',
+  focusHistory: [],
 };
 
 const baseTopic: TopicRecord = {

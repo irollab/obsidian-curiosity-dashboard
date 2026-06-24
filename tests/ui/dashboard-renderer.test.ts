@@ -34,12 +34,17 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     backgroundUrl: null,
     commentEvidence: [],
     focus: { kind: 'ready', topic: { ...topic, stage: '制作' } },
+    focusCandidates: [],
+    pickableTopics: [],
     metrics: [],
     mobileReadOnly: false,
     queue: [],
     reviewPath: null,
     tasks: [{ checked: false, line: 12, text: '完成首页开发验证' }],
     thisWeek: [],
+    workflowActions: [],
+    promptTemplatesPresent: false,
+    promptTemplatesSkipped: [],
     ...overrides,
   };
 }
@@ -47,13 +52,18 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
 function handlers(): DashboardHandlers {
   return {
     confirmAdvance: vi.fn(async () => undefined),
+    copyPrompt: vi.fn(async () => undefined),
     createReview: vi.fn(async () => undefined),
     createScript: vi.fn(async () => undefined),
     createTopic: vi.fn(async () => undefined),
+    openOutput: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
     openSettings: vi.fn(),
+    seedPromptTemplates: vi.fn(async () => undefined),
     selectTab: vi.fn(async () => undefined),
     setAssociation: vi.fn(async () => undefined),
+    switchFocus: vi.fn(async () => undefined),
+    openWorkPicker: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
   };
 }
@@ -153,28 +163,29 @@ describe('DashboardRenderer', () => {
     const tabs = findAll(root, (element) => element.getAttr('role') === 'tab');
     const tasks = tabs.find((element) => element.text === '任务');
 
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
     expect(tasks?.tag).toBe('button');
     expect(tasks?.type).toBe('button');
     expect(tasks?.getAttr('aria-selected')).toBe('true');
     expect(tasks?.getAttr('tabindex')).toBe('0');
     const event = tasks?.keydown('ArrowRight');
     expect(event?.defaultPrevented).toBe(true);
-    expect(fakeDocument.activeElement?.text).toBe('数据');
-    expect(actions.selectTab).toHaveBeenCalledWith('data');
+    expect(fakeDocument.activeElement?.text).toBe('工作流');
+    expect(actions.selectTab).toHaveBeenCalledWith('workflow');
   });
 
   it('creates a real panel target for every tab and hides inactive panels', () => {
     const { root } = render(model(), 'tasks');
     const panels = findAll(root, (element) => element.getAttr('role') === 'tabpanel');
 
-    expect(panels).toHaveLength(3);
+    expect(panels).toHaveLength(4);
     expect(panels.map((panel) => panel.getAttr('id'))).toEqual([
       'curiosity-panel-overview',
       'curiosity-panel-tasks',
+      'curiosity-panel-workflow',
       'curiosity-panel-data',
     ]);
-    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true, true]);
     expect(findByText(panels[1]!, '任务中心')).toBeDefined();
     expect(findByText(panels[0]!, '任务中心')).toBeUndefined();
   });

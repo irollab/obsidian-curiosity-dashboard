@@ -2,6 +2,7 @@ import type { DashboardModel } from '@/domain/models';
 import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
+import { bindGuardedAction } from '../guarded-action';
 
 export function renderHero(
   parent: HTMLElement,
@@ -82,6 +83,58 @@ export function renderHero(
     }
   }
   actionButton(actions, t.t('hero.viewTopic'), () => void handlers.openPath(topic.path));
+
+  renderFocusSwitcher(body, model, handlers, t);
+}
+
+function renderFocusSwitcher(
+  parent: HTMLElement,
+  model: DashboardModel,
+  handlers: DashboardHandlers,
+  t: Translator,
+): void {
+  // 只显示"其他"候选：当前焦点已在 Hero 主体展示，无需重复。
+  const others = model.focusCandidates.filter((candidate) => !candidate.isActive);
+  if (others.length === 0) return;
+
+  const switcher = parent.createDiv({ cls: 'curiosity-focus-switcher' });
+  switcher.createSpan({ cls: 'curiosity-focus-switcher-label', text: t.t('hero.switchLabel') });
+  const chips = switcher.createDiv({ cls: 'curiosity-focus-chips' });
+  for (const candidate of others) {
+    const chip = chips.createEl('button', {
+      cls: 'curiosity-focus-chip curiosity-write-action',
+      type: 'button',
+    });
+    // track 是 content-box 裁剪层：padding 留在 button 上不参与裁剪，
+    // 滚动文字在 track 内被裁断，左右 padding 始终保持留白。
+    const track = chip.createSpan({ cls: 'curiosity-focus-chip-track' });
+    const label = track.createSpan({
+      cls: 'curiosity-focus-chip-label',
+      text: t.t('hero.focusChip', { issue: candidate.issue, title: candidate.title }),
+    });
+    enableOverflowMarquee(track, label);
+    if (model.mobileReadOnly) {
+      chip.disabled = true;
+      chip.setAttr('title', t.t('common.mobileReadonlyMode'));
+    } else {
+      bindGuardedAction(chip, () => handlers.switchFocus(candidate.path));
+    }
+  }
+}
+
+function enableOverflowMarquee(track: HTMLElement, label: HTMLElement): void {
+  // track 是 content-box 裁剪窗口（padding 留在 button 上不参与裁剪）；
+  // 文字溢出时由 JS 精确计算位移，测试桩无布局度量则安全跳过。
+  const apply = (): void => {
+    const trackWidth = track.clientWidth;
+    const labelWidth = label.scrollWidth;
+    if (typeof trackWidth !== 'number' || typeof labelWidth !== 'number') return;
+    if (labelWidth <= trackWidth + 1) return;
+    label.style.setProperty('--curiosity-chip-shift', `${trackWidth - labelWidth}px`);
+    label.addClass('is-overflow');
+  };
+  apply();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
 }
 
 function factCard(parent: HTMLElement, label: string, value: string, variant: string): void {

@@ -22,7 +22,7 @@
 
 # Install
 
-将同一版本的 `main.js`、`manifest.json` 和 `styles.css` 放入：
+将同一版本的 `main.js`、`manifest.json`、`styles.css` 以及 `fonts/` 目录（含 `SmileySans-Oblique.woff2` 与 `OFL.txt`）放入：
 
 ```text
 <your-vault>/.obsidian/plugins/curiosity-dashboard/
@@ -72,10 +72,18 @@ CI 在 Windows 和 macOS 上执行安装、测试、生产构建、打包和 ZIP
 dist/curiosity-dashboard/main.js
 dist/curiosity-dashboard/manifest.json
 dist/curiosity-dashboard/styles.css
+dist/curiosity-dashboard/fonts/SmileySans-Oblique.woff2
+dist/curiosity-dashboard/fonts/OFL.txt
 dist/curiosity-dashboard-<version>.zip
 ```
 
-ZIP 中只有 `curiosity-dashboard/` 下述三个插件文件，不包含源码、示例、用户数据或背景图。版本号来自 `package.json` 并必须与 `manifest.json` 一致，目录 ID 来自 `manifest.json`。打包命令会立即解析 ZIP 的 central/local headers，验证条目集合、UTF-8 标志、CRC、解压长度与源文件内容；任一检查失败则命令失败。
+ZIP 中只有 `curiosity-dashboard/` 下述发布文件，不包含源码、示例、用户数据或背景图：
+
+- `main.js`、`manifest.json`、`styles.css` — 插件主体。
+- `fonts/SmileySans-Oblique.woff2` — 得意黑 Smiley Sans v2.0.1 网页字体，仅用于展示性标题/期数，随插件离线加载（运行时不请求远程字体）。
+- `fonts/OFL.txt` — Smiley Sans 的 SIL Open Font License 1.1 全文，保留来源、版本与许可。
+
+版本号来自 `package.json` 并必须与 `manifest.json` 一致，目录 ID 来自 `manifest.json`。打包命令会立即解析 ZIP 的 central/local headers，验证条目集合、UTF-8 标志、CRC、解压长度与源文件内容；任一检查失败则命令失败。
 
 # License
 

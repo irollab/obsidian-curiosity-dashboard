@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Smiley Sans";
+  src: url("fonts/SmileySans-Oblique.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .curiosity-dashboard {
   --curiosity-bg: #05060d;
   --curiosity-panel: #10121f;
@@ -13,6 +21,7 @@
   --curiosity-muted: #a7adbe;
   --curiosity-radius-window: 22px;
   --curiosity-radius-card: 16px;
+  --curiosity-display-font: "Smiley Sans", Georgia, "Times New Roman", "Songti SC", serif;
   min-height: 100%;
   color: var(--curiosity-text);
   background: var(--curiosity-bg);
@@ -98,6 +107,7 @@
 .curiosity-dashboard .curiosity-kicker,
 .curiosity-dashboard .curiosity-fact-label {
   color: var(--curiosity-cyan);
+  font-family: var(--curiosity-display-font);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.15em;
@@ -109,7 +119,7 @@
   max-width: 760px;
   margin: 14px 0 26px;
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: clamp(4.2rem, 7.4vw, 7rem);
   font-style: italic;
   font-weight: 400;
@@ -129,6 +139,7 @@
   border-radius: 999px;
   background: rgba(5, 6, 13, 0.72);
   color: var(--curiosity-cyan);
+  font-family: var(--curiosity-display-font);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -139,7 +150,7 @@
   max-width: 720px;
   margin: 0 0 24px;
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: clamp(1.8rem, 3.2vw, 3rem);
   font-style: italic;
   font-weight: 400;
@@ -200,7 +211,7 @@
 
 .curiosity-dashboard .curiosity-fact-value {
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: clamp(1.15rem, 2vw, 1.55rem);
   font-style: italic;
   font-weight: 400;
@@ -287,6 +298,102 @@
   border-left: 3px solid var(--curiosity-pink);
 }
 
+.curiosity-dashboard .curiosity-focus-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.curiosity-dashboard .curiosity-focus-switcher-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #9aa0b4;
+}
+
+.curiosity-dashboard .curiosity-focus-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.curiosity-dashboard .curiosity-focus-chip {
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border-color: var(--curiosity-line);
+  background: var(--curiosity-panel);
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curiosity-dashboard .curiosity-focus-chip:hover:not(:disabled) {
+  border-color: var(--curiosity-blue);
+  color: var(--curiosity-text);
+}
+
+.curiosity-dashboard .curiosity-focus-chip-track {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.curiosity-dashboard .curiosity-focus-chip-label {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.curiosity-dashboard .curiosity-focus-chip-label.is-overflow {
+  animation: curiosity-chip-marquee 8s ease-in-out infinite alternate;
+}
+
+@keyframes curiosity-chip-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--curiosity-chip-shift, 0)); }
+}
+
+.curiosity-modal .curiosity-work-picker-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+}
+
+.curiosity-modal .curiosity-work-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.curiosity-modal .curiosity-work-picker-item.is-current {
+  border-color: var(--curiosity-blue);
+  background: #0a1a2e;
+}
+
+.curiosity-modal .curiosity-work-picker-issue {
+  flex: 0 0 auto;
+  color: var(--curiosity-cyan);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.curiosity-modal .curiosity-work-picker-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .curiosity-dashboard .curiosity-content {
   width: min(100%, 1680px);
   margin-inline: auto;
@@ -347,6 +454,11 @@
   gap: 20px;
 }
 
+.curiosity-dashboard .curiosity-tab-panel--tasks > .curiosity-mission,
+.curiosity-dashboard .curiosity-tab-panel--tasks > .curiosity-this-week {
+  grid-area: auto;
+}
+
 .curiosity-dashboard .curiosity-window {
   min-width: 0;
   overflow: hidden;
@@ -398,6 +510,7 @@
 .curiosity-dashboard .curiosity-window-title {
   margin: 0;
   color: #ffffff;
+  font-family: var(--curiosity-display-font);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -407,6 +520,7 @@
 .curiosity-dashboard .curiosity-window-issue {
   overflow: hidden;
   color: var(--curiosity-muted);
+  font-family: var(--curiosity-display-font);
   font-size: 11px;
   text-align: right;
   text-overflow: ellipsis;
@@ -503,6 +617,7 @@
 .curiosity-dashboard .curiosity-comment-evidence h3 {
   margin: 0 0 14px;
   color: #ffffff;
+  font-family: var(--curiosity-display-font);
   font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.01em;
@@ -593,7 +708,7 @@
 .curiosity-dashboard .curiosity-section > h2 {
   margin: 0 0 18px;
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: clamp(1.5rem, 2vw, 2rem);
   font-style: italic;
   font-weight: 400;
@@ -670,6 +785,35 @@
   white-space: nowrap;
 }
 
+.curiosity-dashboard .curiosity-week-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.curiosity-dashboard .curiosity-week-stat {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--curiosity-line);
+  border-radius: var(--curiosity-radius-card);
+  background: var(--curiosity-panel-2);
+}
+
+.curiosity-dashboard .curiosity-week-stat-label {
+  color: var(--curiosity-muted);
+  font-size: 11px;
+}
+
+.curiosity-dashboard .curiosity-week-stat-value {
+  color: #ffffff;
+  font-family: var(--curiosity-display-font);
+  font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
 .curiosity-dashboard .curiosity-queue-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -701,7 +845,7 @@
   border: 0;
   background: transparent;
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: 20px;
   font-style: italic;
   font-weight: 400;
@@ -825,7 +969,7 @@
 }
 
 .curiosity-dashboard .curiosity-dashboard-state h2 {
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: 2rem;
   font-style: italic;
   font-weight: 400;
@@ -918,6 +1062,7 @@
 
 .curiosity-modal {
   --curiosity-blue: #0a84ff;
+  --curiosity-display-font: "Smiley Sans", Georgia, "Times New Roman", "Songti SC", serif;
   width: min(92vw, 560px);
   max-height: min(86vh, 720px);
   overflow-x: hidden;
@@ -940,7 +1085,7 @@
 .curiosity-modal .curiosity-modal-content h2 {
   margin: 0 0 10px;
   color: #ffffff;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--curiosity-display-font);
   font-size: 28px;
   font-style: italic;
   font-weight: 400;
@@ -962,6 +1107,10 @@
   color: #f7f8ff;
   font-size: 13px;
   font-weight: 650;
+}
+
+.curiosity-modal--create .setting-item-info:not(:empty) {
+  flex: 0 0 6em;
 }
 
 .curiosity-modal input[type="text"],
@@ -1154,6 +1303,10 @@
     gap: 2px;
   }
 
+  .curiosity-dashboard .curiosity-week-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .curiosity-dashboard .curiosity-item-meta {
     white-space: normal;
   }
@@ -1185,6 +1338,10 @@
   .curiosity-modal .setting-item {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .curiosity-modal .setting-item-info {
+    flex: 0 0 auto;
   }
 
   .curiosity-modal input[type="text"],
@@ -1253,3 +1410,16 @@
     background: #141622;
   }
 }
+
+.curiosity-dashboard .curiosity-workflow-focus { opacity: .85; margin: 0 0 .75rem; font-size: .9em; }
+.curiosity-dashboard .curiosity-workflow-skipped { color: var(--text-warning); font-size: .8em; margin: 0 0 .6rem; }
+.curiosity-dashboard .curiosity-workflow-group { margin-bottom: .5rem; }
+.curiosity-dashboard .curiosity-workflow-group.is-focus > summary { font-weight: 600; }
+.curiosity-dashboard .curiosity-workflow-group > summary { cursor: pointer; padding: .35rem 0; }
+.curiosity-dashboard .curiosity-workflow-cards { display: grid; gap: .6rem; padding: .4rem 0 .6rem; }
+.curiosity-dashboard .curiosity-workflow-card { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: .7rem .8rem; background: var(--background-secondary); }
+.curiosity-dashboard .curiosity-workflow-card h3 { margin: 0 0 .25rem; font-size: 1em; }
+.curiosity-dashboard .curiosity-workflow-card p { margin: 0 0 .5rem; opacity: .8; font-size: .85em; }
+.curiosity-dashboard .curiosity-workflow-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.curiosity-dashboard .curiosity-workflow-readonly { font-size: .8em; opacity: .7; margin-top: .4rem; }
+.curiosity-dashboard .curiosity-workflow-empty { text-align: center; padding: 1.5rem 1rem; }

@@ -51,4 +51,17 @@ export class VaultMutationService {
       frontmatter[field] = value;
     });
   }
+
+  async switchHomepageFocus(from: string | null, to: string): Promise<void> {
+    // 在两篇选题之间转移唯一的 `homepage_focus: true` 标记。
+    // from === to 或 from 为 null（无/多焦点）时只确保目标为 true。
+    if (from !== null && from !== to) {
+      await this.vault.updateFrontmatter(from, (frontmatter) => {
+        frontmatter.homepage_focus = false;
+      });
+    }
+    await this.vault.updateFrontmatter(to, (frontmatter) => {
+      frontmatter.homepage_focus = true;
+    });
+  }
 }

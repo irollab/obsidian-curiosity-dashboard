@@ -6,6 +6,7 @@ export type TranslationKey =
   | 'settings.heading'
   | 'settings.topicDir' | 'settings.scriptDir' | 'settings.assetDir' | 'settings.reviewDir'
   | 'settings.topicTemplate' | 'settings.scriptTemplate' | 'settings.reviewTemplate'
+  | 'settings.promptDir'
   | 'settings.backgroundPath' | 'settings.openOnStartup' | 'settings.defaultTab'
   | 'settings.enableMobileView'
   | 'settings.language' | 'settings.language.auto' | 'settings.language.zh' | 'settings.language.en'
@@ -15,7 +16,12 @@ export type TranslationKey =
   | 'common.unavailableMobileReadonly' | 'common.unavailableReason' | 'common.unknownReason'
   | 'common.labelPath' | 'common.contextDetail'
   | 'stage.unknown'
-  | 'tab.overview' | 'tab.tasks' | 'tab.data' | 'tabs.aria'
+  | 'tab.overview' | 'tab.tasks' | 'tab.workflow' | 'tab.data' | 'tabs.aria'
+  | 'workflow.deckEmptyTitle' | 'workflow.deckEmptyBody' | 'workflow.seedButton'
+  | 'workflow.groupGeneral' | 'workflow.copyButton' | 'workflow.openOutput'
+  | 'workflow.focusContext' | 'workflow.needsFocus' | 'workflow.readonlyOutput'
+  | 'workflow.copied' | 'workflow.copyFailed' | 'workflow.skippedNotice'
+  | 'workflow.seeded' | 'workflow.seedFailed' | 'workflow.outputMissing'
   | 'link.topicCard' | 'link.script' | 'link.asset' | 'link.review'
   | 'action.createTopicCard' | 'action.createScript' | 'action.createReview'
   | 'action.openScript' | 'action.openReview'
@@ -23,7 +29,7 @@ export type TranslationKey =
   | 'hero.menuAria' | 'hero.brand' | 'hero.context' | 'hero.kicker' | 'hero.title'
   | 'hero.noFocus' | 'hero.openSettings' | 'hero.multipleTitle' | 'hero.multipleMessage'
   | 'hero.issuePill' | 'hero.currentStageLabel' | 'hero.nextActionLabel' | 'hero.nextActionUnset'
-  | 'hero.openScript' | 'hero.viewTopic'
+  | 'hero.openScript' | 'hero.viewTopic' | 'hero.switchLabel' | 'hero.focusChip'
   | 'hero.mobileReadonlyCreateScript' | 'hero.createScriptDisabledAria'
   | 'mission.title' | 'mission.issue' | 'mission.advance'
   | 'mission.invalidStageTitle' | 'mission.terminalStageTitle'
@@ -31,6 +37,7 @@ export type TranslationKey =
   | 'mission.stageTrackAria' | 'mission.tasksTitle' | 'mission.tasksEmpty'
   | 'mission.quickLook' | 'mission.multipleCandidates'
   | 'thisWeek.title' | 'thisWeek.empty'
+  | 'thisWeek.statStage' | 'thisWeek.statChecklist' | 'thisWeek.statQueue' | 'thisWeek.pendingItems'
   | 'queue.title' | 'queue.empty'
   | 'pulse.title' | 'pulse.empty' | 'pulse.sourceButton' | 'pulse.sourceButtonAria'
   | 'pulse.noSource' | 'pulse.commentsTitle' | 'pulse.commentsEmpty' | 'pulse.tableCaption'
@@ -42,6 +49,7 @@ export type TranslationKey =
   | 'dock.review' | 'dock.settings' | 'dock.aria'
   | 'dock.reason.mobileCreateTopic' | 'dock.reason.noFocus'
   | 'dock.reason.mobileCreate' | 'dock.reason.notLinked'
+  | 'workPicker.title' | 'workPicker.empty'
   | 'confirmStage.title' | 'confirmStage.terminal' | 'confirmStage.prompt' | 'confirmStage.confirm'
   | 'createFile.issue' | 'createFile.title' | 'createFile.targetPath'
   | 'createFile.errIssue' | 'createFile.errTitleEmpty' | 'createFile.errTitleInvalid'
@@ -55,7 +63,8 @@ export type TranslationKey =
   | 'view.createFailed' | 'view.verifyFocusFailed' | 'view.focusChangedNotLinked'
   | 'view.linkFailed' | 'view.openFailedDetail' | 'view.refreshFailedDetail'
   | 'view.partialResult' | 'view.linkedSuffix' | 'view.detailJoin'
-  | 'view.saveTabFailed' | 'view.saveAssociationFailed' | 'view.mobileReadonlyModify'
+  | 'view.saveTabFailed' | 'view.saveAssociationFailed' | 'view.switchFocusFailed'
+  | 'view.mobileReadonlyModify'
   | 'view.noSettingsEntry' | 'view.openSettingsFailed'
   | 'error.autoRefreshFailed' | 'error.openFailed' | 'error.openOnStartupFailed';
 
@@ -68,6 +77,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.topicTemplate': { zh: '选题卡模板', en: 'Topic template' },
   'settings.scriptTemplate': { zh: '脚本模板', en: 'Script template' },
   'settings.reviewTemplate': { zh: '复盘模板', en: 'Review template' },
+  'settings.promptDir': { zh: '提示词模板目录', en: 'Prompt template folder' },
   'settings.backgroundPath': { zh: '背景图片', en: 'Background image' },
   'settings.openOnStartup': { zh: '启动时打开', en: 'Open on startup' },
   'settings.defaultTab': { zh: '默认标签页', en: 'Default tab' },
@@ -100,8 +110,35 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'stage.unknown': { zh: '未知阶段', en: 'Unknown stage' },
   'tab.overview': { zh: '概览', en: 'Overview' },
   'tab.tasks': { zh: '任务', en: 'Tasks' },
+  'tab.workflow': { zh: '工作流', en: 'Workflow' },
   'tab.data': { zh: '数据', en: 'Data' },
   'tabs.aria': { zh: '工作台视图', en: 'Dashboard views' },
+  'workflow.deckEmptyTitle': { zh: '还没有提示词模板', en: 'No prompt templates yet' },
+  'workflow.deckEmptyBody': {
+    zh: '生成一组默认提示词，即可一键驱动日常工作流。',
+    en: 'Generate default prompts to drive your daily workflow.',
+  },
+  'workflow.seedButton': { zh: '生成默认提示词模板', en: 'Generate default prompts' },
+  'workflow.groupGeneral': { zh: '通用', en: 'General' },
+  'workflow.copyButton': { zh: '复制提示词', en: 'Copy prompt' },
+  'workflow.openOutput': { zh: '打开输出位置', en: 'Open output' },
+  'workflow.focusContext': {
+    zh: '当前焦点：第{issue}期《{title}》· {stage}阶段', en: 'Focus: #{issue} {title} · {stage}',
+  },
+  'workflow.needsFocus': { zh: '需先设定焦点选题', en: 'Set a focus topic first' },
+  'workflow.readonlyOutput': { zh: '只读·给结论，不写文件', en: 'Read-only · gives conclusions' },
+  'workflow.copied': {
+    zh: '已复制「{label}」提示词 · 预期输出 → {output}', en: 'Copied "{label}" · output → {output}',
+  },
+  'workflow.copyFailed': { zh: '复制失败，已写入临时文件：{path}', en: 'Copy failed; wrote temp file: {path}' },
+  'workflow.skippedNotice': {
+    zh: '已跳过格式不全的模板：{files}', en: 'Skipped malformed templates: {files}',
+  },
+  'workflow.seeded': { zh: '已生成默认提示词模板到 {dir}', en: 'Default prompts created in {dir}' },
+  'workflow.seedFailed': { zh: '生成默认模板失败：{detail}', en: 'Failed to seed prompts: {detail}' },
+  'workflow.outputMissing': {
+    zh: '输出位置暂无文件，Codex 运行后再来查看', en: 'No output yet; check after Codex runs',
+  },
   'link.topicCard': { zh: '选题卡', en: 'Topic card' },
   'link.script': { zh: '脚本', en: 'Script' },
   'link.asset': { zh: '素材', en: 'Asset' },
@@ -130,6 +167,8 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'hero.nextActionUnset': { zh: '下一步未设置', en: 'Next action not set' },
   'hero.openScript': { zh: '打开当前脚本', en: 'Open current script' },
   'hero.viewTopic': { zh: '查看选题卡', en: 'View topic card' },
+  'hero.switchLabel': { zh: '切换当前作品', en: 'Switch current work' },
+  'hero.focusChip': { zh: '第 {issue} 期 · {title}', en: 'Issue {issue} · {title}' },
   'hero.mobileReadonlyCreateScript': {
     zh: '移动端只读，不能创建脚本', en: 'Read-only on mobile; cannot create script',
   },
@@ -162,6 +201,10 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   },
   'thisWeek.title': { zh: '本周', en: 'This Week' },
   'thisWeek.empty': { zh: '本周暂无已设置截止日期的作品。', en: 'No works with a due date this week.' },
+  'thisWeek.statStage': { zh: '阶段进度', en: 'Stage progress' },
+  'thisWeek.statChecklist': { zh: '清单完成', en: 'Checklist done' },
+  'thisWeek.statQueue': { zh: '队列待办', en: 'Queue pending' },
+  'thisWeek.pendingItems': { zh: '{count} 项', en: '{count} items' },
   'queue.title': { zh: '制作队列', en: 'Production Queue' },
   'queue.empty': { zh: '暂无后续制作队列。', en: 'No upcoming production queue.' },
   'pulse.title': { zh: '渠道脉搏', en: 'Channel Pulse' },
@@ -205,6 +248,8 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
     zh: '移动端只读，不能创建{what}', en: 'Read-only on mobile; cannot create {what}',
   },
   'dock.reason.notLinked': { zh: '当前作品未关联{what}', en: 'Current work has no linked {what}' },
+  'workPicker.title': { zh: '选择当前作品', en: 'Select current work' },
+  'workPicker.empty': { zh: '暂无可选作品', en: 'No pickable works' },
   'confirmStage.title': { zh: '推进制作阶段', en: 'Advance production stage' },
   'confirmStage.terminal': { zh: '当前已经是最终阶段。', en: 'Already at the final stage.' },
   'confirmStage.prompt': { zh: '从「{from}」推进到「{to}」？', en: 'Advance from "{from}" to "{to}"?' },
@@ -268,6 +313,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'view.detailJoin': { zh: '；且', en: '; and ' },
   'view.saveTabFailed': { zh: '无法保存当前标签', en: 'Unable to save current tab' },
   'view.saveAssociationFailed': { zh: '无法保存关联路径', en: 'Unable to save association path' },
+  'view.switchFocusFailed': { zh: '无法切换当前作品', en: 'Unable to switch current work' },
   'view.mobileReadonlyModify': { zh: '移动端只读，不能修改文件。', en: 'Read-only on mobile; cannot modify files.' },
   'view.noSettingsEntry': {
     zh: '当前 Obsidian 版本未提供设置入口', en: 'This Obsidian version provides no settings entry',

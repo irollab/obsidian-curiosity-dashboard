@@ -7,17 +7,21 @@ import { FakeVaultGateway } from '../support/fake-vault-gateway';
 const CHECKLIST = '## 本期执行清单\n- [x] 已完成\n- [ ] 待处理';
 const SETTINGS: DashboardSettings = {
   topicDir: '10-选题池',
+  topicInboxDir: '10-选题池/待评估',
   scriptDir: '40-脚本大纲',
+  scriptDraftDir: '40-脚本大纲/草稿',
   assetDir: '20-素材库',
   reviewDir: '60-发布复盘',
   topicTemplate: '99-模板/选题卡模板.md',
   scriptTemplate: '99-模板/脚本大纲模板.md',
   reviewTemplate: '99-模板/发布复盘模板.md',
+  promptDir: '99-模板/codex-提示词',
   backgroundPath: '',
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
   language: 'auto',
+  focusHistory: [],
 };
 const NON_READY_FOCUS_CASES: Array<{
   kind: 'none' | 'multiple';
@@ -541,6 +545,25 @@ describe('DashboardDataService', () => {
       'Dashboard snapshot changed repeatedly during load',
     );
     expect(vault.readPaths.filter((path) => path.endsWith('review.md'))).toHaveLength(2);
+  });
+
+  it('注入 workflowActions 与 promptTemplatesPresent', async () => {
+    const vault = new FakeVaultGateway();
+    vault.files.set(
+      '99-模板/codex-提示词/评估.md',
+      '---\nid: eval\nlabel: 批量评估\nstage: 选题\norder: 1\nneeds_focus: false\noutput: "10-选题池/待评估"\n---\n评估 {{inbox_dir}}',
+    );
+    const model = await service(vault).load(false);
+    expect(model.promptTemplatesPresent).toBe(true);
+    expect(model.workflowActions.map((a) => a.id)).toEqual(['eval']);
+    expect(model.promptTemplatesSkipped).toEqual([]);
+  });
+
+  it('无提示词模板目录时 promptTemplatesPresent 为 false', async () => {
+    const vault = new FakeVaultGateway();
+    const model = await service(vault).load(false);
+    expect(model.promptTemplatesPresent).toBe(false);
+    expect(model.workflowActions).toEqual([]);
   });
 });
 

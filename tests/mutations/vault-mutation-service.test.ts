@@ -183,3 +183,36 @@ describe('VaultMutationService.setAssociationPath', () => {
     },
   );
 });
+
+describe('VaultMutationService.switchHomepageFocus', () => {
+  it('transfers the homepage focus from the current topic to the target', async () => {
+    const vault = await topicVault();
+    await vault.create('topics/other.md', '');
+    vault.metadata.set(TOPIC_PATH, { stage: '选题', homepage_focus: true });
+    vault.metadata.set('topics/other.md', { stage: '制作', homepage_focus: false });
+
+    await new VaultMutationService(vault).switchHomepageFocus(TOPIC_PATH, 'topics/other.md');
+
+    expect(vault.metadata.get(TOPIC_PATH)?.homepage_focus).toBe(false);
+    expect(vault.metadata.get('topics/other.md')?.homepage_focus).toBe(true);
+  });
+
+  it('only marks the target when the current focus is unknown', async () => {
+    const vault = await topicVault();
+    await vault.create('topics/other.md', '');
+    vault.metadata.set('topics/other.md', { stage: '制作', homepage_focus: false });
+
+    await new VaultMutationService(vault).switchHomepageFocus(null, 'topics/other.md');
+
+    expect(vault.metadata.get('topics/other.md')?.homepage_focus).toBe(true);
+  });
+
+  it('keeps a single topic focused when re-selecting the current focus', async () => {
+    const vault = await topicVault();
+    vault.metadata.set(TOPIC_PATH, { stage: '选题', homepage_focus: true });
+
+    await new VaultMutationService(vault).switchHomepageFocus(TOPIC_PATH, TOPIC_PATH);
+
+    expect(vault.metadata.get(TOPIC_PATH)?.homepage_focus).toBe(true);
+  });
+});

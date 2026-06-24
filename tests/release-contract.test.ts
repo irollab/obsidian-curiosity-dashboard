@@ -72,6 +72,16 @@ describe('release documentation contract', () => {
     expect(verifier).toContain('0x04034b50');
     expect(verifier).toContain('crc32');
   });
+
+  it('bundles the Smiley Sans webfont and OFL license as required release files', async () => {
+    const pkg = await text('scripts/package.mjs');
+    const verify = await text('scripts/verify-package.mjs');
+    for (const file of ['fonts/SmileySans-Oblique.woff2', 'fonts/OFL.txt']) {
+      expect(pkg).toContain(file);
+      expect(verify).toContain(file);
+    }
+    expect(pkg).toMatch(/mkdir\([^)]*dirname/);
+  });
 });
 
 async function text(path: string): Promise<string> {

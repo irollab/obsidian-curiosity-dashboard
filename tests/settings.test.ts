@@ -112,34 +112,42 @@ describe('dashboard settings', () => {
   it('provides the complete default dashboard settings', () => {
     expect(DEFAULT_SETTINGS).toEqual({
       topicDir: '10-选题池',
+      topicInboxDir: '10-选题池/待评估',
       scriptDir: '40-脚本大纲',
+      scriptDraftDir: '40-脚本大纲/草稿',
       assetDir: '20-素材库',
       reviewDir: '60-发布复盘',
       topicTemplate: '99-模板/选题卡模板.md',
       scriptTemplate: '99-模板/脚本大纲模板.md',
       reviewTemplate: '99-模板/发布复盘模板.md',
+      promptDir: '99-模板/codex-提示词',
       backgroundPath: '',
       openOnStartup: false,
       defaultTab: 'overview',
       enableMobileView: true,
       language: 'auto',
+      focusHistory: [],
     });
   });
 
   it('accepts valid runtime settings', () => {
     const settings = {
       topicDir: 'topics',
+      topicInboxDir: 'topics/待评估',
       scriptDir: 'scripts',
+      scriptDraftDir: 'scripts/草稿',
       assetDir: 'assets',
       reviewDir: 'reviews',
       topicTemplate: 'templates/topic.md',
       scriptTemplate: 'templates/script.md',
       reviewTemplate: 'templates/review.md',
+      promptDir: '自定义/提示词',
       backgroundPath: '',
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
       language: 'en',
+      focusHistory: [],
     } as const;
 
     expect(parseSettings(settings)).toEqual(settings);
@@ -193,6 +201,36 @@ describe('dashboard settings', () => {
     expect(parseSettings([])).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('promptDir 默认值与解析', () => {
+    expect(DEFAULT_SETTINGS.promptDir).toBe('99-模板/codex-提示词');
+    expect(parseSettings({ promptDir: '自定义/目录' }).promptDir).toBe('自定义/目录');
+    expect(parseSettings({ promptDir: '   ' }).promptDir).toBe('99-模板/codex-提示词');
+  });
+
+  it('defaultTab 接受 workflow', () => {
+    expect(parseSettings({ defaultTab: 'workflow' }).defaultTab).toBe('workflow');
+  });
+
+  it('parses focus history entries and drops invalid ones', () => {
+    expect(parseSettings({ focusHistory: 'no' }).focusHistory).toEqual([]);
+    const parsed = parseSettings({
+      focusHistory: [
+        { path: 'a.md', switchedAt: 1000 },
+        { path: '   ', switchedAt: 2 },
+        { path: 'b.md' },
+        'nope',
+        null,
+        { path: 'c.md', switchedAt: 'x' },
+      ],
+    }).focusHistory;
+    expect(parsed).toHaveLength(3);
+    expect(parsed[0]).toEqual({ path: 'a.md', switchedAt: 1000 });
+    expect(parsed[1]?.path).toBe('b.md');
+    expect(typeof parsed[1]?.switchedAt).toBe('number');
+    expect(parsed[2]?.path).toBe('c.md');
+    expect(typeof parsed[2]?.switchedAt).toBe('number');
+  });
+
   it('displays every setting with current values', () => {
     makeTab();
 
@@ -205,44 +243,51 @@ describe('dashboard settings', () => {
       { kind: 'text', name: 'Topic template', value: '99-模板/选题卡模板.md' },
       { kind: 'text', name: 'Script template', value: '99-模板/脚本大纲模板.md' },
       { kind: 'text', name: 'Review template', value: '99-模板/发布复盘模板.md' },
+      { kind: 'text', name: 'Prompt template folder', value: '99-模板/codex-提示词' },
       { kind: 'text', name: 'Background image', value: '' },
       { kind: 'toggle', name: 'Open on startup', value: false },
       { kind: 'dropdown', name: 'Default tab', value: 'overview' },
       { kind: 'toggle', name: 'Enable simplified mobile view', value: true },
       { kind: 'dropdown', name: 'Language', value: 'auto' },
     ]);
-    expect(obsidianMock.settings[9]?.options).toEqual({ overview: 'Overview', tasks: 'Tasks', data: 'Data' });
-    expect(obsidianMock.settings[11]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
+    expect(obsidianMock.settings[10]?.options).toEqual({
+      overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', data: 'Data',
+    });
+    expect(obsidianMock.settings[12]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
   });
 
   it('persists every setting change', async () => {
     const { plugin } = makeTab();
 
-    for (const setting of obsidianMock.settings.slice(0, 8)) {
+    for (const setting of obsidianMock.settings.slice(0, 9)) {
       expect(setting.onChange('  changed  ')).toBeUndefined();
     }
-    expect(obsidianMock.settings[8]?.onChange(true)).toBeUndefined();
-    expect(obsidianMock.settings[9]?.onChange('data')).toBeUndefined();
-    expect(obsidianMock.settings[10]?.onChange(false)).toBeUndefined();
-    expect(obsidianMock.settings[11]?.onChange('zh')).toBeUndefined();
+    expect(obsidianMock.settings[9]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[10]?.onChange('data')).toBeUndefined();
+    expect(obsidianMock.settings[11]?.onChange(false)).toBeUndefined();
+    expect(obsidianMock.settings[12]?.onChange('zh')).toBeUndefined();
 
-    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(12));
+    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(13));
 
     expect(plugin.settings).toEqual({
       topicDir: 'changed',
+      topicInboxDir: '10-选题池/待评估',
       scriptDir: 'changed',
+      scriptDraftDir: '40-脚本大纲/草稿',
       assetDir: 'changed',
       reviewDir: 'changed',
       topicTemplate: 'changed',
       scriptTemplate: 'changed',
       reviewTemplate: 'changed',
+      promptDir: 'changed',
       backgroundPath: 'changed',
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
       language: 'zh',
+      focusHistory: [],
     });
-    expect(plugin.saveSettings).toHaveBeenCalledTimes(12);
+    expect(plugin.saveSettings).toHaveBeenCalledTimes(13);
   });
 
   it('contains save failures at every onChange boundary and shows a notice', async () => {
@@ -259,7 +304,7 @@ describe('dashboard settings', () => {
       expect(result).toBeUndefined();
     }
 
-    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(12));
+    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(13));
     expect(obsidianMock.notices.every((message) => message.includes('disk full'))).toBe(true);
   });
 });

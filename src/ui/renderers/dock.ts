@@ -29,7 +29,7 @@ export function renderDock(
   items.push(model.mobileReadOnly
     ? disabledItem(t.t('dock.ideas'), 'lightbulb', t.t('dock.reason.mobileCreateTopic'))
     : { action: handlers.createTopic, icon: 'lightbulb', label: t.t('dock.ideas') });
-  items.push(fileItem(t.t('dock.mission'), 'crosshair', topic?.path ?? null, t.t('dock.reason.noFocus'), handlers));
+  items.push({ action: () => handlers.openWorkPicker(), icon: 'crosshair', label: t.t('dock.mission') });
   items.push({ action: () => handlers.selectTab('tasks'), icon: 'list-checks', label: t.t('dock.tasks') });
   items.push(associatedItem(
     { key: 'script', label: t.t('dock.script') }, 'file-text', topic, 'scriptPath', model, handlers, t,

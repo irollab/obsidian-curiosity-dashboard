@@ -1,5 +1,6 @@
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
+import type { WorkflowAction } from '@/domain/workflow';
 import type { Translator } from '@/i18n/translator';
 
 import { renderHero } from './renderers/hero';
@@ -8,9 +9,10 @@ import { renderThisWeek } from './renderers/this-week';
 import { renderProductionQueue } from './renderers/production-queue';
 import { renderChannelPulse } from './renderers/channel-pulse';
 import { renderQuickActions } from './renderers/quick-actions';
+import { renderWorkflowDeck } from './renderers/workflow-deck';
 import { renderDock } from './renderers/dock';
 
-export type DashboardTab = 'overview' | 'tasks' | 'data';
+export type DashboardTab = 'overview' | 'tasks' | 'workflow' | 'data';
 export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
 
 export interface DashboardHandlers {
@@ -20,9 +22,14 @@ export interface DashboardHandlers {
   openSettings(): void;
   selectTab(tab: DashboardTab): Promise<void>;
   setAssociation(topicPath: string, field: AssociationField, value: string): Promise<void>;
+  switchFocus(path: string): Promise<void>;
+  openWorkPicker(): Promise<void>;
   createTopic(): Promise<void>;
   createScript(topic: TopicRecord): Promise<void>;
   createReview(topic: TopicRecord): Promise<void>;
+  copyPrompt(action: WorkflowAction): Promise<void>;
+  openOutput(path: string): Promise<void>;
+  seedPromptTemplates(): Promise<void>;
 }
 
 export class DashboardRenderer {
@@ -39,6 +46,7 @@ export class DashboardRenderer {
     const tabsConfig: ReadonlyArray<{ id: DashboardTab; label: string }> = [
       { id: 'overview', label: t.t('tab.overview') },
       { id: 'tasks', label: t.t('tab.tasks') },
+      { id: 'workflow', label: t.t('tab.workflow') },
       { id: 'data', label: t.t('tab.data') },
     ];
 
@@ -97,13 +105,15 @@ export class DashboardRenderer {
       if (!active) continue;
       if (id === 'overview') {
         renderMissionControl(panel, model, handlers, t);
-        renderThisWeek(panel, model.thisWeek, handlers.openPath, t);
+        renderThisWeek(panel, model, handlers.openPath, t);
         renderProductionQueue(panel, model.queue, handlers.openPath, t);
         renderChannelPulse(panel, model, handlers.openPath, t);
         renderQuickActions(panel, model, handlers, t);
+      } else if (id === 'workflow') {
+        renderWorkflowDeck(panel, model, handlers, t);
       } else if (id === 'tasks') {
         renderMissionControl(panel, model, handlers, t);
-        renderThisWeek(panel, model.thisWeek, handlers.openPath, t);
+        renderThisWeek(panel, model, handlers.openPath, t);
       } else {
         renderChannelPulse(panel, model, handlers.openPath, t);
       }

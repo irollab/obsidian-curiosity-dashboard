@@ -1,4 +1,5 @@
 import type { Stage } from './stages';
+import type { WorkflowAction } from './workflow';
 
 export interface TopicRecord {
   path: string;
@@ -38,8 +39,23 @@ export type FocusState =
   | { kind: 'invalid-stage'; topic: TopicRecord & { stage: null } }
   | { kind: 'ready'; topic: TopicRecord & { stage: Stage } };
 
+export interface FocusHistoryEntry {
+  path: string;
+  switchedAt: number;
+}
+
+export interface FocusCandidate {
+  path: string;
+  issue: number;
+  title: string;
+  stage: Stage | null;
+  isActive: boolean;
+}
+
 export interface DashboardModel {
   focus: FocusState;
+  focusCandidates: FocusCandidate[];
+  pickableTopics: TopicRecord[];
   tasks: ChecklistTask[];
   thisWeek: TopicRecord[];
   queue: TopicRecord[];
@@ -53,4 +69,7 @@ export interface DashboardModel {
     assetPath: string[];
     reviewPath: string[];
   };
+  workflowActions: WorkflowAction[];
+  promptTemplatesPresent: boolean;
+  promptTemplatesSkipped: string[];
 }

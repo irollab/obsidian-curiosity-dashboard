@@ -1,7 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { inflateRawSync } from 'node:zlib';
 
-const releaseFiles = ['main.js', 'manifest.json', 'styles.css'];
+const releaseFiles = [
+  'main.js',
+  'manifest.json',
+  'styles.css',
+  'fonts/SmileySans-Oblique.woff2',
+  'fonts/OFL.txt',
+];
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
 try {

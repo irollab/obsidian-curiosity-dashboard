@@ -1,7 +1,14 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 
-const releaseFiles = ['main.js', 'manifest.json', 'styles.css'];
+const releaseFiles = [
+  'main.js',
+  'manifest.json',
+  'styles.css',
+  'fonts/SmileySans-Oblique.woff2',
+  'fonts/OFL.txt',
+];
 
 try {
   const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
@@ -26,7 +33,9 @@ try {
   const entries = [];
   for (const file of releaseFiles) {
     try {
-      await cp(file, `${pluginDir}/${file}`);
+      const target = `${pluginDir}/${file}`;
+      await mkdir(dirname(target), { recursive: true });
+      await cp(file, target);
       entries.push({ name: `${id}/${file}`, data: await readFile(file) });
     } catch (error) {
       throw new Error(`Cannot package required release file ${file}: ${errorMessage(error)}`);

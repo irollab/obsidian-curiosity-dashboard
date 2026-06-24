@@ -5,6 +5,7 @@ import { resolveLocale } from '@/i18n/locale';
 import type { TranslationKey } from '@/i18n/translations';
 import { createTranslator, type Translator } from '@/i18n/translator';
 import { DashboardDataService } from '@/data/dashboard-data-service';
+import { PromptSeedService } from '@/mutations/prompt-seed-service';
 import { TemplateCreationService } from '@/mutations/template-creation-service';
 import { VaultMutationService } from '@/mutations/vault-mutation-service';
 import type { VaultGateway } from '@/ports/vault-gateway';
@@ -113,12 +114,26 @@ export default class CuriosityDashboardPlugin extends Plugin {
     return new DashboardDataService(this.gateway, this.settings);
   }
 
+  recordFocusSwitch(path: string): void {
+    // 记录最近切为焦点的选题（去重、最多 8 条），持久化到 data.json 并触发刷新。
+    const entry = { path, switchedAt: Date.now() };
+    const remaining = this.settings.focusHistory.filter((existing) => existing.path !== path);
+    this.settings.focusHistory = [entry, ...remaining].slice(0, 8);
+    void this.saveSettings().catch((error: unknown) =>
+      this.reportError('error.autoRefreshFailed', error),
+    );
+  }
+
   mutationService(): VaultMutationService {
     return new VaultMutationService(this.gateway);
   }
 
   templateService(): TemplateCreationService {
     return new TemplateCreationService(this.gateway);
+  }
+
+  promptSeedService(): PromptSeedService {
+    return new PromptSeedService(this.gateway);
   }
 
   translator(): Translator {

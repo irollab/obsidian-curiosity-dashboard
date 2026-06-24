@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceLeaf } from 'obsidian';
 
 import type { DashboardModel } from '@/domain/models';
+import type { WorkflowAction } from '@/domain/workflow';
 import { createTranslator } from '@/i18n/translator';
 import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { TemplateNotFoundError } from '@/mutations/template-creation-service';
@@ -11,6 +12,9 @@ import { DEFAULT_SETTINGS } from '@/settings';
 const modalMock = vi.hoisted(() => ({
   confirmAsk: vi.fn<(app: unknown, stage: unknown) => Promise<boolean>>(async () => false),
   createAsk: vi.fn<(app: unknown, defaults: unknown) => Promise<unknown>>(async () => null),
+  workPickerAsk: vi.fn<
+    (app: unknown, topics: unknown, currentPath: unknown, t: unknown) => Promise<string | null>
+  >(async () => null),
 }));
 
 vi.mock('@/ui/confirm-stage-modal', () => ({
@@ -19,6 +23,10 @@ vi.mock('@/ui/confirm-stage-modal', () => ({
 
 vi.mock('@/ui/create-file-modal', () => ({
   CreateFileModal: { ask: modalMock.createAsk },
+}));
+
+vi.mock('@/ui/work-picker-modal', () => ({
+  WorkPickerModal: { ask: modalMock.workPickerAsk },
 }));
 
 const obsidianMock = vi.hoisted(() => {
@@ -136,8 +144,13 @@ const obsidianMock = vi.hoisted(() => {
     type?: string;
   }
 
+  class FakeTFile {}
+  class FakeTFolder {}
+
   return {
     FakeElement,
+    FakeTFile,
+    FakeTFolder,
     getActiveElement: () => activeElement,
     notices: [] as string[],
     platform: { isMobile: false },
@@ -162,8 +175,8 @@ vi.mock('obsidian', () => ({
   Plugin: class {},
   PluginSettingTab: class {},
   Setting: class {},
-  TFile: class {},
-  TFolder: class {},
+  TFile: obsidianMock.FakeTFile,
+  TFolder: obsidianMock.FakeTFolder,
   normalizePath: (path: string) => path,
   setIcon: (element: { setAttr(name: string, value: string): void }, icon: string) => {
     element.setAttr('data-icon', icon);
@@ -175,12 +188,17 @@ const model: DashboardModel = {
   backgroundUrl: null,
   commentEvidence: [],
   focus: { kind: 'none' },
+  focusCandidates: [],
+  pickableTopics: [],
   metrics: [],
   mobileReadOnly: false,
   queue: [],
   reviewPath: null,
   tasks: [],
   thisWeek: [],
+  workflowActions: [],
+  promptTemplatesPresent: false,
+  promptTemplatesSkipped: [],
 };
 
 function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = true) {
@@ -195,10 +213,20 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
   >(async (request) => request.targetPath.replaceAll('\\', '/'));
   const openLinkText = vi.fn(async () => undefined);
   const setting = { open: vi.fn(), openTabById: vi.fn() };
+  const gateway = {
+    create: vi.fn<(path: string, content: string) => Promise<void>>(async () => undefined),
+  };
+  const promptSeed = { seed: vi.fn<(dir: string) => Promise<number>>(async () => 10) };
+  const vault = {
+    createFolder: vi.fn<(path: string) => Promise<void>>(async () => undefined),
+    getAbstractFileByPath: vi.fn<(path: string) => object | null>(() => null),
+  };
   const plugin = {
     dataService: () => ({ load }),
+    gateway,
     manifest: { id: 'curiosity-dashboard' },
     mutationService: () => mutation,
+    promptSeedService: () => promptSeed,
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
     templateService: () => ({ create: templateCreate }),
@@ -206,10 +234,10 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     updateObservedDataPaths: vi.fn(),
   };
   const view = new CuriosityDashboardView(
-    { app: { setting, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
+    { app: { setting, vault, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
     plugin as never,
   ) as CuriosityDashboardView & { contentEl: InstanceType<typeof obsidianMock.FakeElement> };
-  return { mutation, openLinkText, plugin, saveSettings, setting, templateCreate, view };
+  return { gateway, openLinkText, mutation, promptSeed, plugin, saveSettings, setting, templateCreate, vault, view };
 }
 
 function makeView(load: () => Promise<DashboardModel>, enableMobileView = true) {
@@ -371,8 +399,8 @@ describe('CuriosityDashboardView', () => {
     await vi.waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
 
     expect(event?.preventDefault).toHaveBeenCalledOnce();
-    expect(view.contentEl.children[0]?.dataset.activeTab).toBe('data');
-    expect(obsidianMock.getActiveElement()?.text).toBe('数据');
+    expect(view.contentEl.children[0]?.dataset.activeTab).toBe('workflow');
+    expect(obsidianMock.getActiveElement()?.text).toBe('工作流');
     expect(load).toHaveBeenCalledOnce();
   });
 
@@ -516,11 +544,11 @@ describe('CuriosityDashboardView', () => {
     };
     expect(defaults).toMatchObject({
       issue: 45,
-      targetPath: '10-选题池/45-新选题.md',
+      targetPath: '10-选题池/待评估/45-新选题.md',
       templatePath: DEFAULT_SETTINGS.topicTemplate,
       title: '新选题',
     });
-    expect(defaults.targetPathFor(46, 'A:B')).toBe('10-选题池/46-A-B.md');
+    expect(defaults.targetPathFor(46, 'A:B')).toBe('10-选题池/待评估/46-A-B.md');
   });
 
   it.each(['ready', 'invalid-stage'] as const)(
@@ -542,7 +570,7 @@ describe('CuriosityDashboardView', () => {
       const harness = makeHarness(load);
       const scriptRequest = {
         issue: 39,
-        targetPath: '40-脚本大纲/39-首页-A成稿.md',
+        targetPath: '40-脚本大纲/草稿/39-首页-A脚本大纲.md',
         templatePath: DEFAULT_SETTINGS.scriptTemplate,
         title: '首页:A',
       };
@@ -561,7 +589,7 @@ describe('CuriosityDashboardView', () => {
       await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(1));
       expect(modalMock.createAsk.mock.calls[0]?.[1]).toMatchObject({
         issue: 39,
-        targetPath: '40-脚本大纲/39-首页-A成稿.md',
+        targetPath: '40-脚本大纲/草稿/39-首页-A脚本大纲.md',
         title: '首页:A',
       });
       await vi.waitFor(() => expect(harness.templateCreate).toHaveBeenCalledWith(scriptRequest));
@@ -606,7 +634,7 @@ describe('CuriosityDashboardView', () => {
     };
     const value: DashboardModel = { ...model, focus: { kind: 'ready', topic } };
     const request = {
-      issue: 39, targetPath: '40-脚本大纲/39-首页成稿.md',
+      issue: 39, targetPath: '40-脚本大纲/草稿/39-首页脚本大纲.md',
       templatePath: DEFAULT_SETTINGS.scriptTemplate, title: '首页',
     };
 
@@ -1023,6 +1051,141 @@ describe('CuriosityDashboardView', () => {
       );
     },
   );
+
+  describe('workflow cockpit handlers', () => {
+    const action: WorkflowAction = {
+      id: 'gen-script',
+      label: '从选题生成脚本大纲',
+      description: '',
+      group: '策划',
+      order: 1,
+      needsFocus: false,
+      output: '40-脚本大纲/草稿',
+      body: '基于 {{focus_topic}}',
+      sourcePath: 'y.md',
+    };
+
+    function actionsOf(view: CuriosityDashboardView) {
+      return view as unknown as {
+        copyPrompt(action: WorkflowAction): Promise<void>;
+        openOutput(path: string): Promise<void>;
+        seedPromptTemplates(): Promise<void>;
+      };
+    }
+
+    it('copies the built prompt to the clipboard and reports success', async () => {
+      const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      const harness = makeHarness(async () => model);
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).copyPrompt(action);
+
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(writeText.mock.calls[0]?.[0]).toContain('基于');
+      expect(harness.gateway.create).not.toHaveBeenCalled();
+      expect(obsidianMock.notices.some((notice) => notice.includes('从选题生成脚本大纲'))).toBe(true);
+    });
+
+    it('falls back to writing and opening a temp file when the clipboard write fails', async () => {
+      const writeText = vi.fn<(text: string) => Promise<void>>(async () => {
+        throw new Error('denied');
+      });
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      const harness = makeHarness(async () => model);
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).copyPrompt(action);
+
+      expect(harness.gateway.create).toHaveBeenCalledOnce();
+      const call = harness.gateway.create.mock.calls[0];
+      const tempPath = call?.[0] ?? '';
+      const content = call?.[1] ?? '';
+      expect(tempPath).toContain(DEFAULT_SETTINGS.promptDir);
+      expect(content).toContain('基于');
+      expect(harness.openLinkText).toHaveBeenCalledWith(tempPath, '', false);
+    });
+
+    it('opens a file output via openPath when the output resolves to a TFile', async () => {
+      const harness = makeHarness(async () => model);
+      harness.vault.getAbstractFileByPath.mockReturnValue(new obsidianMock.FakeTFile());
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).openOutput('40-脚本大纲/草稿.md');
+
+      expect(harness.openLinkText).toHaveBeenCalledWith('40-脚本大纲/草稿.md', '', false);
+    });
+
+    it('reveals a folder output in the file explorer when the output resolves to a TFolder', async () => {
+      const harness = makeHarness(async () => model);
+      const folder = new obsidianMock.FakeTFolder();
+      harness.vault.getAbstractFileByPath.mockReturnValue(folder);
+      const revealInFolder = vi.fn();
+      (harness.view as unknown as { app: { internalPlugins: unknown } }).app.internalPlugins = {
+        getPluginById: (id: string) =>
+          id === 'file-explorer' ? { instance: { revealInFolder } } : null,
+      };
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).openOutput('40-脚本大纲');
+
+      expect(revealInFolder).toHaveBeenCalledWith(folder);
+    });
+
+    it('shows a notice when the output path does not exist', async () => {
+      const harness = makeHarness(async () => model);
+      harness.vault.getAbstractFileByPath.mockReturnValue(null);
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).openOutput('40-脚本大纲/missing.md');
+
+      expect(obsidianMock.notices).toContain('输出位置暂无文件，Codex 运行后再来查看');
+    });
+
+    it('creates the prompt directory if missing, seeds templates, and refreshes', async () => {
+      const harness = makeHarness(async () => model);
+      harness.vault.getAbstractFileByPath.mockReturnValue(null);
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).seedPromptTemplates();
+
+      expect(harness.vault.createFolder).toHaveBeenCalledWith(DEFAULT_SETTINGS.promptDir);
+      expect(harness.promptSeed.seed).toHaveBeenCalledWith(DEFAULT_SETTINGS.promptDir);
+      expect(harness.plugin.dataService().load).toBeDefined();
+    });
+
+    it('skips creating the prompt directory if it already exists', async () => {
+      const harness = makeHarness(async () => model);
+      harness.vault.getAbstractFileByPath.mockReturnValue(new obsidianMock.FakeTFolder());
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).seedPromptTemplates();
+
+      expect(harness.vault.createFolder).not.toHaveBeenCalled();
+      expect(harness.promptSeed.seed).toHaveBeenCalledWith(DEFAULT_SETTINGS.promptDir);
+    });
+
+    it('reports a failure notice when seeding throws', async () => {
+      const harness = makeHarness(async () => model);
+      harness.vault.getAbstractFileByPath.mockReturnValue(null);
+      harness.promptSeed.seed.mockRejectedValueOnce(new Error('disk full'));
+      await harness.view.refresh();
+
+      await actionsOf(harness.view).seedPromptTemplates();
+
+      expect(obsidianMock.notices.some((notice) => notice.includes('disk full'))).toBe(true);
+    });
+
+    it('blocks seeding when the runtime platform is mobile read-only', async () => {
+      const harness = makeHarness(async () => model);
+      await harness.view.refresh();
+      obsidianMock.platform.isMobile = true;
+
+      await actionsOf(harness.view).seedPromptTemplates();
+
+      expect(harness.promptSeed.seed).not.toHaveBeenCalled();
+    });
+  });
 });
 
 function deferred<T>() {

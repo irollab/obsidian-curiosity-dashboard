@@ -1,4 +1,4 @@
-import type { TopicRecord } from '@/domain/models';
+import type { FocusCandidate, TopicRecord } from '@/domain/models';
 import { normalizeStage } from '@/domain/stages';
 import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 
@@ -40,6 +40,37 @@ export class TopicRepository {
         return due !== null && due >= start && due <= end;
       })
       .sort(compareTopics);
+  }
+
+  focusCandidates(
+    currentFocusPath: string | null,
+    recentPaths: readonly string[] = [],
+  ): FocusCandidate[] {
+    // 候选 = 已进入制作流程的活跃选题（有阶段且非复盘终态）。
+    // 当前焦点排最前并标记 active；其余按"最近用过"(recentPaths 顺序)优先，再按期数倒序。
+    const recency = new Map(recentPaths.map((path, index) => [path, index]));
+    const unseen = Number.MAX_SAFE_INTEGER;
+    return this.all()
+      .filter((topic) => topic.stage !== null && topic.stage !== '复盘')
+      .map((topic): FocusCandidate => ({
+        path: topic.path,
+        issue: topic.issue,
+        title: topic.title,
+        stage: topic.stage,
+        isActive: topic.path === currentFocusPath,
+      }))
+      .sort((left, right) => {
+        if (left.isActive !== right.isActive) return left.isActive ? -1 : 1;
+        const leftRank = recency.get(left.path) ?? unseen;
+        const rightRank = recency.get(right.path) ?? unseen;
+        if (leftRank !== rightRank) return leftRank - rightRank;
+        return right.issue - left.issue;
+      });
+  }
+
+  pickableTopics(): TopicRecord[] {
+    // 弹窗作品选择器用：全部选题按期数倒序，便于从最新项目里挑。
+    return [...this.all()].sort((left, right) => right.issue - left.issue);
   }
 
   private toTopic(path: string): TopicRecord | null {

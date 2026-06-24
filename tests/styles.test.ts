@@ -151,4 +151,56 @@ describe('dashboard stylesheet contract', () => {
     expect(modal).toContain('max-height: min(86vh, 720px)');
     expect(modal).toContain('overscroll-behavior: contain');
   });
+
+  it('lays out the tasks panel full-width by resetting inherited grid placement', async () => {
+    const css = await stylesheet();
+    expect(blockAfter(css, '.curiosity-tab-panel--tasks {'))
+      .toContain('grid-template-columns: minmax(0, 1fr)');
+    // Higher-specificity, order-independent reset of the overview grid-area names
+    // that .curiosity-mission / .curiosity-this-week carry globally.
+    const reset = blockAfter(css, '.curiosity-tab-panel--tasks > .curiosity-mission');
+    expect(reset).toContain('grid-area: auto');
+    expect(css).toContain('.curiosity-tab-panel--tasks > .curiosity-this-week');
+  });
+
+  it('loads Smiley Sans as a local offline display webfont with safe fallback', async () => {
+    const css = await stylesheet();
+    const face = blockAfter(css, '@font-face');
+    expect(face).toContain('font-family: "smiley sans"');
+    expect(face).toMatch(/src:\s*url\(["']?fonts\/smileysans-oblique\.woff2["']?\)/);
+    expect(face).not.toContain('http://');
+    expect(face).not.toContain('https://');
+    expect(face).toContain('font-display: swap');
+    expect(css).toMatch(/--curiosity-display-font:\s*"smiley sans",[^;]*georgia[^;]*songti sc[^;]*serif/);
+  });
+
+  it('styles the workflow deck cards, groups, and empty state inside the dashboard scope', async () => {
+    const css = await stylesheet();
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-card {'))
+      .toContain('background: var(--background-secondary)');
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-group > summary'))
+      .toContain('cursor: pointer');
+    expect(css).toContain('.curiosity-dashboard .curiosity-workflow-group.is-focus > summary');
+    expect(css).toContain('.curiosity-dashboard .curiosity-workflow-skipped');
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-empty'))
+      .toContain('text-align: center');
+  });
+
+  it('applies the display font only to display selectors and keeps body/code stacks', async () => {
+    const css = await stylesheet();
+    for (const selector of [
+      '.curiosity-dashboard .curiosity-hero-title',
+      '.curiosity-dashboard .curiosity-current-title',
+      '.curiosity-dashboard .curiosity-section > h2',
+      '.curiosity-dashboard .curiosity-window-title',
+      '.curiosity-dashboard .curiosity-issue-pill',
+      '.curiosity-modal .curiosity-modal-content h2',
+    ]) {
+      expect(blockAfter(css, selector)).toContain('var(--curiosity-display-font)');
+    }
+    expect(css).toContain('font-family: -apple-system, blinkmacsystemfont, "segoe ui", sans-serif');
+    expect(css).toContain('font-family: ui-monospace, "sfmono-regular", consolas, monospace');
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-table-wrapper table'))
+      .not.toContain('var(--curiosity-display-font)');
+  });
 });
