@@ -32,7 +32,13 @@ export function renderHero(
 
   const hero = parent.createEl('header', { cls: 'curiosity-hero' });
   const body = hero.createDiv({ cls: 'curiosity-hero-body' });
-  body.createEl('h1', { cls: 'curiosity-hero-title', text: t.t('hero.title') });
+  // 标题逐字拆分：每个字一个 span，配合 CSS stagger 动画实现 Blur Text 浮现；
+  // h1.textContent 仍聚合为完整标题，无障碍与文本检索不受影响。
+  const title = body.createEl('h1', { cls: 'curiosity-hero-title' });
+  Array.from(t.t('hero.title')).forEach((character, index) => {
+    const char = title.createSpan({ cls: 'curiosity-hero-title-char', text: character });
+    char.style.setProperty('--curiosity-char-index', String(index));
+  });
 
   if (model.focus.kind === 'none') {
     body.createEl('p', { cls: 'curiosity-hero-message', text: t.t('hero.noFocus') });
@@ -72,6 +78,16 @@ export function renderHero(
   factCard(facts, t.t('hero.nextActionLabel'), nextAction ?? t.t('hero.nextActionUnset'), 'is-next');
 
   const actions = body.createDiv({ cls: 'curiosity-hero-actions' });
+  const idea = actionButton(
+    actions,
+    t.t('idea.captureHeading'),
+    () => void handlers.captureIdea(),
+    'curiosity-hero-idea curiosity-write-action',
+  );
+  if (model.mobileReadOnly) {
+    idea.disabled = true;
+    idea.setAttr('title', t.t('common.mobileReadonlyMode'));
+  }
   const scriptPath = topic.scriptPath;
   if (scriptPath !== null) {
     actionButton(

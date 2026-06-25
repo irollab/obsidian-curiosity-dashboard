@@ -59,6 +59,10 @@ const obsidianMock = vi.hoisted(() => {
     tag = 'div';
     type = '';
 
+    get textContent(): string {
+      return this.text + this.children.map((child) => child.textContent).join('');
+    }
+
     set innerHTML(_value: string) {
       throw new Error('Unsafe innerHTML was used');
     }
@@ -263,12 +267,11 @@ function findByText(
   root: InstanceType<typeof obsidianMock.FakeElement>,
   text: string,
 ): InstanceType<typeof obsidianMock.FakeElement> | undefined {
-  if (root.text === text) return root;
   for (const child of root.children) {
     const match = findByText(child, text);
     if (match !== undefined) return match;
   }
-  return undefined;
+  return root.textContent === text ? root : undefined;
 }
 
 function findDock(

@@ -37,6 +37,11 @@ export class FakeElement {
   tag = 'div';
   type = '';
 
+  /** 聚合自身与后代文本，对齐真实 DOM Element.textContent 语义（拆字渲染后仍可整体匹配）。 */
+  get textContent(): string {
+    return this.text + this.children.map((child) => child.textContent).join('');
+  }
+
   set innerHTML(_value: string) {
     throw new Error('Unsafe innerHTML was used');
   }
@@ -130,12 +135,14 @@ interface FakeElementOptions {
 }
 
 export function findByText(root: FakeElement, text: string): FakeElement | undefined {
-  if (root.text === text) return root;
+  // 后序：优先命中叶子（自身文本元素），聚合容器仅作兜底，
+  // 这样拆字渲染的标题（自身无 text、靠子 span 聚合）仍可匹配，
+  // 同时 click/disabled 断言继续拿到可交互叶子而非祖先容器。
   for (const child of root.children) {
     const match = findByText(child, text);
     if (match !== undefined) return match;
   }
-  return undefined;
+  return root.textContent === text ? root : undefined;
 }
 
 export function findAll(root: FakeElement, predicate: (element: FakeElement) => boolean): FakeElement[] {
