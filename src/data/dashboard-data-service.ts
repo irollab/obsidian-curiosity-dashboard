@@ -6,6 +6,7 @@ import type { DashboardSettings } from '@/settings';
 import { AssociationResolver } from './association-resolver';
 import { resolveFocus } from './focus-resolver';
 import { PromptTemplateRepository } from './prompt-template-repository';
+import { ideaInboxPath, parseIdeaInbox } from './idea-inbox';
 import { ReviewMetricsService } from './review-metrics-service';
 import { TopicRepository } from './topic-repository';
 
@@ -73,7 +74,11 @@ export class DashboardDataService {
     const review = await reviewService.load(focusTopic?.reviewPath ?? null);
     const backgroundUrl =
       settings.backgroundPath.length === 0 ? null : vault.resourceUrl(settings.backgroundPath);
+    const logoUrl =
+      settings.logoPath.length === 0 ? null : vault.resourceUrl(settings.logoPath);
     const promptRepo = await PromptTemplateRepository.load(vault, settings.promptDir);
+    const ideaPath = ideaInboxPath(settings.topicInboxDir);
+    const ideas = vault.exists(ideaPath) ? parseIdeaInbox(await vault.read(ideaPath)) : [];
 
     return {
       focus,
@@ -89,11 +94,13 @@ export class DashboardDataService {
       reviewPath: review.path,
       commentEvidence: review.commentEvidence,
       backgroundUrl,
+      logoUrl,
       mobileReadOnly,
       associationCandidates,
       workflowActions: promptRepo.all(),
       promptTemplatesPresent: promptRepo.present(),
       promptTemplatesSkipped: promptRepo.skipped(),
+      ideas,
     };
   }
 }

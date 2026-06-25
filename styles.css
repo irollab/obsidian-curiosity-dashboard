@@ -10,7 +10,7 @@
   --curiosity-bg: #05060d;
   --curiosity-panel: #10121f;
   --curiosity-panel-2: #181b28;
-  --curiosity-line: #303447;
+  --curiosity-line: rgba(255, 255, 255, 0.32);
   --curiosity-text: #f7f8ff;
   --curiosity-blue: #0a84ff;
   --curiosity-cyan: #00e5ff;
@@ -27,6 +27,7 @@
   --curiosity-radius-card: 16px;
   --curiosity-display-font: "Smiley Sans", Georgia, "Times New Roman", "Songti SC", serif;
   min-height: 100%;
+  padding: 0 !important;
   color: var(--curiosity-text);
   background: var(--curiosity-bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -64,16 +65,16 @@
   background-image:
     linear-gradient(90deg, rgba(5, 6, 13, 0.92) 0%, rgba(5, 6, 13, 0.58) 38%, rgba(5, 6, 13, 0.08) 72%),
     linear-gradient(0deg, #05060d 0%, rgba(5, 6, 13, 0) 34%),
-    var(--curiosity-background, none);
+    var(--curiosity-background, url("assets/default-background.png"));
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
 }
 
 .curiosity-dashboard .curiosity-menu-bar {
-  position: absolute;
-  z-index: 2;
-  inset: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   height: 38px;
   align-items: center;
@@ -88,6 +89,20 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.025em;
+}
+
+.curiosity-dashboard .curiosity-menu-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.curiosity-dashboard .curiosity-menu-logo {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  background: var(--curiosity-logo, url("assets/IROLLAB_light.svg")) center / contain no-repeat;
 }
 
 .curiosity-dashboard .curiosity-menu-brand {
@@ -399,7 +414,7 @@
 }
 
 .curiosity-dashboard .curiosity-content {
-  width: min(100%, 1680px);
+  width: min(100%, 2160px);
   margin-inline: auto;
   padding: 56px clamp(20px, 3.8vw, 64px) 40px;
   background: var(--curiosity-bg);
@@ -452,6 +467,15 @@
     "pulse pulse";
   grid-template-columns: minmax(0, 1.35fr) minmax(290px, 0.65fr);
   gap: 20px;
+}
+
+@container curiosity-dashboard (min-width: 1600px) {
+  .curiosity-dashboard .curiosity-tab-panel--overview {
+    grid-template-areas:
+      "mission mission"
+      "week actions"
+      "queue pulse";
+  }
 }
 
 .curiosity-dashboard .curiosity-tab-panel--tasks {
@@ -527,7 +551,7 @@
   overflow: hidden;
   color: var(--curiosity-muted);
   font-family: var(--curiosity-display-font);
-  font-size: 11px;
+  font-size: clamp(0.85rem, 1.1vw, 1rem);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1090,6 +1114,21 @@
   color: #a7adbe;
 }
 
+.curiosity-modal .curiosity-idea-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--curiosity-glass-border);
+  border-radius: 12px;
+  background: var(--curiosity-glass-card-bg);
+  color: var(--curiosity-text);
+  font-size: 15px;
+}
+
 .curiosity-modal .setting-item {
   gap: 18px;
   padding: 14px 0;
@@ -1200,7 +1239,7 @@
     background-image:
       linear-gradient(90deg, rgba(5, 6, 13, 0.86), rgba(5, 6, 13, 0.24)),
       linear-gradient(0deg, #05060d 0%, rgba(5, 6, 13, 0) 38%),
-      var(--curiosity-background, none);
+      var(--curiosity-background, url("assets/default-background.png"));
     background-position: 54% center;
   }
 
@@ -1462,7 +1501,7 @@
   position: absolute;
   inset: -40px;
   z-index: -1;
-  background-image: var(--curiosity-background, none);
+  background-image: var(--curiosity-background, url("assets/default-background.png"));
   background-position: center;
   background-size: cover;
   background-attachment: fixed;
@@ -1499,4 +1538,27 @@
   color: #2a1c00;
 }
 .curiosity-dashboard .curiosity-workflow-readonly { font-size: .8em; opacity: .7; margin-top: .4rem; }
+.curiosity-dashboard .curiosity-idea-empty { font-size: .85em; opacity: .65; margin: .2rem 0 .6rem; }
+.curiosity-dashboard .curiosity-idea-list { display: grid; gap: 6px; margin: .2rem 0 .7rem; }
+.curiosity-dashboard .curiosity-idea-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--curiosity-line);
+  border-radius: 10px;
+  background: var(--curiosity-glass-card-bg);
+}
+.curiosity-dashboard .curiosity-idea-check { flex: 0 0 auto; width: 16px; height: 16px; accent-color: var(--curiosity-green); }
+.curiosity-dashboard .curiosity-idea-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.curiosity-dashboard .curiosity-idea-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curiosity-dashboard .curiosity-idea-time { font-size: .72em; opacity: .55; }
+.curiosity-dashboard .curiosity-idea-edit,
+.curiosity-dashboard .curiosity-idea-delete {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 2px 10px;
+  font-size: .8em;
+}
+.curiosity-dashboard .curiosity-idea-delete:hover:not(:disabled) { background: #ff5f57; border-color: #ff5f57; color: #2a0000; }
 .curiosity-dashboard .curiosity-workflow-empty { text-align: center; padding: 1.5rem 1rem; }

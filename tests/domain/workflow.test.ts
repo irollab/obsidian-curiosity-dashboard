@@ -15,6 +15,7 @@ function context(overrides: Partial<PromptContext> = {}): PromptContext {
     reviewTemplate: '99-模板/发布复盘模板.md',
     date: '2026-06-25',
     week: '2026-W26',
+    ideas: '',
     ...overrides,
   };
 }

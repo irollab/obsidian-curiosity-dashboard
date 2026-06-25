@@ -28,7 +28,7 @@ export function renderDock(
 
   items.push(model.mobileReadOnly
     ? disabledItem(t.t('dock.ideas'), 'lightbulb', t.t('dock.reason.mobileCreateTopic'))
-    : { action: handlers.createTopic, icon: 'lightbulb', label: t.t('dock.ideas') });
+    : { action: handlers.captureIdea, icon: 'lightbulb', label: t.t('dock.ideas') });
   items.push({ action: () => handlers.openWorkPicker(), icon: 'crosshair', label: t.t('dock.mission') });
   items.push({ action: () => handlers.selectTab('tasks'), icon: 'list-checks', label: t.t('dock.tasks') });
   items.push(associatedItem(

@@ -29,6 +29,10 @@ vi.mock('@/ui/work-picker-modal', () => ({
   WorkPickerModal: { ask: modalMock.workPickerAsk },
 }));
 
+vi.mock('@/ui/idea-capture-modal', () => ({
+  IdeaCaptureModal: { ask: vi.fn(async () => null) },
+}));
+
 const obsidianMock = vi.hoisted(() => {
   let activeElement: FakeElement | null = null;
 
@@ -186,6 +190,7 @@ vi.mock('obsidian', () => ({
 const model: DashboardModel = {
   associationCandidates: { assetPath: [], reviewPath: [], scriptPath: [] },
   backgroundUrl: null,
+  logoUrl: null,
   commentEvidence: [],
   focus: { kind: 'none' },
   focusCandidates: [],
@@ -199,6 +204,7 @@ const model: DashboardModel = {
   workflowActions: [],
   promptTemplatesPresent: false,
   promptTemplatesSkipped: [],
+  ideas: [],
 };
 
 function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = true) {
@@ -217,6 +223,13 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     create: vi.fn<(path: string, content: string) => Promise<void>>(async () => undefined),
   };
   const promptSeed = { seed: vi.fn<(dir: string) => Promise<number>>(async () => 10) };
+  const ideaCapture = {
+    capture: vi.fn<(inboxPath: string, idea: string, heading: string) => Promise<void>>(async () => undefined),
+  };
+  const ideaInbox = {
+    edit: vi.fn<(inboxPath: string, line: number, text: string) => Promise<void>>(async () => undefined),
+    delete: vi.fn<(inboxPath: string, line: number) => Promise<void>>(async () => undefined),
+  };
   const vault = {
     createFolder: vi.fn<(path: string) => Promise<void>>(async () => undefined),
     getAbstractFileByPath: vi.fn<(path: string) => object | null>(() => null),
@@ -227,6 +240,8 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     manifest: { id: 'curiosity-dashboard' },
     mutationService: () => mutation,
     promptSeedService: () => promptSeed,
+    ideaCaptureService: () => ideaCapture,
+    ideaInboxService: () => ideaInbox,
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
     templateService: () => ({ create: templateCreate }),
@@ -536,7 +551,9 @@ describe('CuriosityDashboardView', () => {
     const harness = makeHarness(async () => value);
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, '灵感')?.parent?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
+    await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
+    findByText(harness.view.contentEl, '创建选题卡')?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     const defaults = modalMock.createAsk.mock.calls[0]?.[1] as {
       issue: number; targetPath: string; targetPathFor(issue: number, title: string): string;
@@ -836,7 +853,9 @@ describe('CuriosityDashboardView', () => {
     harness.templateCreate.mockRejectedValueOnce(new TemplateNotFoundError('missing.md'));
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, '灵感')?.parent?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
+    await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
+    findByText(harness.view.contentEl, '创建选题卡')?.click();
 
     await vi.waitFor(() => expect(harness.setting.open).toHaveBeenCalledOnce());
     expect(harness.setting.openTabById).toHaveBeenCalledWith('curiosity-dashboard');
@@ -856,7 +875,9 @@ describe('CuriosityDashboardView', () => {
     harness.setting.open = undefined as never;
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, '灵感')?.parent?.click();
+    findByText(harness.view.contentEl, '概览')?.click();
+    await vi.waitFor(() => expect(harness.view.contentEl.children[0]?.dataset.activeTab).toBe('overview'));
+    findByText(harness.view.contentEl, '创建选题卡')?.click();
 
     await vi.waitFor(() => expect(obsidianMock.notices).toEqual([
       '创建失败：模板缺失且无法自动打开，请手动打开设置：missing.md。',
@@ -969,7 +990,7 @@ describe('CuriosityDashboardView', () => {
     expect(findByText(harness.view.contentEl, '尚未设置当前作品。')).toBeUndefined();
   });
 
-  it('coalesces Quick Actions and Dock creation into one modal and allows retry after settlement', async () => {
+  it('coalesces repeated topic-card creation into one modal and allows retry after settlement', async () => {
     const harness = makeHarness(async () => model);
     await harness.view.refresh();
     findByText(harness.view.contentEl, '概览')?.click();
@@ -978,13 +999,13 @@ describe('CuriosityDashboardView', () => {
     modalMock.createAsk.mockImplementationOnce(() => new Promise((resolve) => { closeModal = resolve; }));
 
     findByText(harness.view.contentEl, '创建选题卡')?.click();
-    findByText(harness.view.contentEl, '灵感')?.parent?.click();
+    findByText(harness.view.contentEl, '创建选题卡')?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledOnce());
     closeModal(null);
     await Promise.resolve();
     await Promise.resolve();
 
-    findByText(harness.view.contentEl, '灵感')?.parent?.click();
+    findByText(harness.view.contentEl, '创建选题卡')?.click();
     await vi.waitFor(() => expect(modalMock.createAsk).toHaveBeenCalledTimes(2));
   });
 

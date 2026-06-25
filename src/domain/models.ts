@@ -23,6 +23,12 @@ export interface ChecklistTask {
   checked: boolean;
 }
 
+export interface IdeaEntry {
+  line: number;
+  recordedAt: string;
+  text: string;
+}
+
 export interface MetricRow {
   platform: string;
   collectedAt: string | null;
@@ -63,6 +69,7 @@ export interface DashboardModel {
   reviewPath: string | null;
   commentEvidence: string[];
   backgroundUrl: string | null;
+  logoUrl: string | null;
   mobileReadOnly: boolean;
   associationCandidates: {
     scriptPath: string[];
@@ -72,4 +79,5 @@ export interface DashboardModel {
   workflowActions: WorkflowAction[];
   promptTemplatesPresent: boolean;
   promptTemplatesSkipped: string[];
+  ideas: IdeaEntry[];
 }

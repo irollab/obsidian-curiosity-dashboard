@@ -18,7 +18,7 @@ const TEMPLATES: SeedTemplate[] = [
   {
     filename: '1-收集灵感整理选题卡.md',
     frontmatter: { id: 'collect-ideas', label: '收集灵感 → 整理选题卡', stage: '选题', order: 1, needs_focus: false, output: '10-选题池/待评估', description: '把零散想法整理成标准选题卡' },
-    body: '请把下面这些想法整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题使用 {{topic_template}} 的结构。\n不要写完整脚本，只做选题判断。\n\n想法：\n1. \n2. \n3. ',
+    body: '请把下面这些想法整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题使用 {{topic_template}} 的结构。\n不要写完整脚本，只做选题判断。\n\n想法：\n{{ideas}}',
   },
   {
     filename: '2-批量评估待评估选题.md',

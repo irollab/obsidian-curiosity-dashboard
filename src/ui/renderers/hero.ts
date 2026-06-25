@@ -10,20 +10,27 @@ export function renderHero(
   handlers: DashboardHandlers,
   t: Translator,
 ): void {
-  const hero = parent.createEl('header', { cls: 'curiosity-hero' });
   if (model.backgroundUrl !== null) {
     // 设在共同父节点（shell）上，让 hero 与 content 都能继承该背景图变量，
     // 内容区面板的水玻璃 backdrop-filter 才有图可模糊。
     parent.style.setProperty('--curiosity-background', cssBackgroundUrl(model.backgroundUrl));
   }
+  // 自定义 logo 覆盖内置资产（默认走 CSS 里 assets/IROLLAB_light.svg 兜底）。
+  if (model.logoUrl !== null) {
+    parent.style.setProperty('--curiosity-logo', cssBackgroundUrl(model.logoUrl));
+  }
 
-  const menu = hero.createDiv({
+  // 常驻顶栏：作为 shell 的 sticky 子节点（hero 之前），整页滚动都可见。
+  const menu = parent.createDiv({
     cls: 'curiosity-menu-bar',
     attr: { 'aria-label': t.t('hero.menuAria') },
   });
-  menu.createSpan({ cls: 'curiosity-menu-brand', text: t.t('hero.brand') });
+  const brandGroup = menu.createDiv({ cls: 'curiosity-menu-left' });
+  brandGroup.createSpan({ cls: 'curiosity-menu-logo', attr: { 'aria-hidden': 'true' } });
+  brandGroup.createSpan({ cls: 'curiosity-menu-brand', text: t.t('hero.brand') });
   menu.createSpan({ cls: 'curiosity-menu-context', text: t.t('hero.context') });
 
+  const hero = parent.createEl('header', { cls: 'curiosity-hero' });
   const body = hero.createDiv({ cls: 'curiosity-hero-body' });
   body.createEl('h1', { cls: 'curiosity-hero-title', text: t.t('hero.title') });
 

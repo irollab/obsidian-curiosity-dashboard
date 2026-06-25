@@ -7,7 +7,7 @@ export type TranslationKey =
   | 'settings.topicDir' | 'settings.scriptDir' | 'settings.assetDir' | 'settings.reviewDir'
   | 'settings.topicTemplate' | 'settings.scriptTemplate' | 'settings.reviewTemplate'
   | 'settings.promptDir'
-  | 'settings.backgroundPath' | 'settings.openOnStartup' | 'settings.defaultTab'
+  | 'settings.backgroundPath' | 'settings.logoPath' | 'settings.openOnStartup' | 'settings.defaultTab'
   | 'settings.enableMobileView'
   | 'settings.language' | 'settings.language.auto' | 'settings.language.zh' | 'settings.language.en'
   | 'settings.saveFailed'
@@ -54,6 +54,10 @@ export type TranslationKey =
   | 'createFile.issue' | 'createFile.title' | 'createFile.targetPath'
   | 'createFile.errIssue' | 'createFile.errTitleEmpty' | 'createFile.errTitleInvalid'
   | 'createFile.errPathEmpty' | 'createFile.errPathExt'
+  | 'idea.captureHeading' | 'idea.capturePlaceholder' | 'idea.save'
+  | 'idea.captured' | 'idea.captureFailed' | 'idea.inboxHeading'
+  | 'idea.organize' | 'idea.editHeading' | 'idea.edit' | 'idea.delete'
+  | 'idea.listEmpty' | 'idea.editFailed' | 'idea.deleteFailed'
   | 'modal.createTopicHeading' | 'modal.createScriptHeading' | 'modal.createReviewHeading'
   | 'view.loadingTitle' | 'view.loadingBody' | 'view.errorTitle' | 'view.retry'
   | 'view.mobileDisabledTitle' | 'view.mobileDisabledBody' | 'view.unknownLoadError'
@@ -79,6 +83,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.reviewTemplate': { zh: '复盘模板', en: 'Review template' },
   'settings.promptDir': { zh: '提示词模板目录', en: 'Prompt template folder' },
   'settings.backgroundPath': { zh: '背景图片', en: 'Background image' },
+  'settings.logoPath': { zh: 'Logo 图片', en: 'Logo image' },
   'settings.openOnStartup': { zh: '启动时打开', en: 'Open on startup' },
   'settings.defaultTab': { zh: '默认标签页', en: 'Default tab' },
   'settings.enableMobileView': { zh: '启用移动端简化视图', en: 'Enable simplified mobile view' },
@@ -149,8 +154,8 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'action.openScript': { zh: '打开脚本', en: 'Open script' },
   'action.openReview': { zh: '打开复盘', en: 'Open review' },
   'overflow.items': { zh: '另有 {count} 项', en: '{count} more' },
-  'hero.menuAria': { zh: '内容工作室菜单栏', en: 'Content Studio menu bar' },
-  'hero.brand': { zh: '内容工作室', en: 'Content Studio' },
+  'hero.menuAria': { zh: '刈柔实验室菜单栏', en: 'irollab menu bar' },
+  'hero.brand': { zh: '刈柔实验室', en: 'irollab' },
   'hero.context': { zh: '本地 Markdown 工作区', en: 'Local Markdown Workspace' },
   'hero.title': { zh: '追逐你的好奇心', en: 'Chase your curiosity' },
   'hero.noFocus': { zh: '尚未设置当前作品。', en: 'No current work set yet.' },
@@ -253,6 +258,19 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'confirmStage.terminal': { zh: '当前已经是最终阶段。', en: 'Already at the final stage.' },
   'confirmStage.prompt': { zh: '从「{from}」推进到「{to}」？', en: 'Advance from "{from}" to "{to}"?' },
   'confirmStage.confirm': { zh: '推进', en: 'Advance' },
+  'idea.captureHeading': { zh: '记录灵感', en: 'Capture idea' },
+  'idea.capturePlaceholder': { zh: '一句话记下这个念头…', en: 'Jot down the spark…' },
+  'idea.save': { zh: '收集', en: 'Capture' },
+  'idea.captured': { zh: '已收集到 {path}', en: 'Captured to {path}' },
+  'idea.captureFailed': { zh: '收集灵感失败', en: 'Failed to capture idea' },
+  'idea.inboxHeading': { zh: '# 灵感收集箱', en: '# Idea inbox' },
+  'idea.organize': { zh: '去整理选题', en: 'Organize topics' },
+  'idea.editHeading': { zh: '编辑灵感', en: 'Edit idea' },
+  'idea.edit': { zh: '编辑', en: 'Edit' },
+  'idea.delete': { zh: '删除', en: 'Delete' },
+  'idea.listEmpty': { zh: '还没有收集到灵感，点底部灯泡随手记一条。', en: 'No ideas yet — tap the lightbulb to capture one.' },
+  'idea.editFailed': { zh: '编辑灵感失败', en: 'Failed to edit idea' },
+  'idea.deleteFailed': { zh: '删除灵感失败', en: 'Failed to delete idea' },
   'createFile.issue': { zh: '期数', en: 'Issue' },
   'createFile.title': { zh: '标题', en: 'Title' },
   'createFile.targetPath': { zh: '目标路径', en: 'Target path' },

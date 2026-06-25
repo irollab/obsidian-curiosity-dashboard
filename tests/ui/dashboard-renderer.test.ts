@@ -32,6 +32,7 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
   return {
     associationCandidates: { assetPath: [], reviewPath: [], scriptPath: [] },
     backgroundUrl: null,
+    logoUrl: null,
     commentEvidence: [],
     focus: { kind: 'ready', topic: { ...topic, stage: '制作' } },
     focusCandidates: [],
@@ -45,6 +46,7 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     workflowActions: [],
     promptTemplatesPresent: false,
     promptTemplatesSkipped: [],
+    ideas: [],
     ...overrides,
   };
 }
@@ -56,6 +58,10 @@ function handlers(): DashboardHandlers {
     createReview: vi.fn(async () => undefined),
     createScript: vi.fn(async () => undefined),
     createTopic: vi.fn(async () => undefined),
+    captureIdea: vi.fn(async () => undefined),
+    editIdea: vi.fn(async () => undefined),
+    deleteIdea: vi.fn(async () => undefined),
+    openWorkflowIdeas: vi.fn(async () => undefined),
     openOutput: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
     openSettings: vi.fn(),

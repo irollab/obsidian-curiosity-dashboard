@@ -17,6 +17,7 @@ const settings: DashboardSettings = {
   reviewTemplate: '99-模板/发布复盘模板.md',
   promptDir: '99-模板/codex-提示词',
   backgroundPath: '',
+  logoPath: '',
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,

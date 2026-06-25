@@ -6,6 +6,8 @@ import type { TranslationKey } from '@/i18n/translations';
 import { createTranslator, type Translator } from '@/i18n/translator';
 import { DashboardDataService } from '@/data/dashboard-data-service';
 import { PromptSeedService } from '@/mutations/prompt-seed-service';
+import { IdeaCaptureService } from '@/mutations/idea-capture-service';
+import { IdeaInboxService } from '@/mutations/idea-inbox-service';
 import { TemplateCreationService } from '@/mutations/template-creation-service';
 import { VaultMutationService } from '@/mutations/vault-mutation-service';
 import type { VaultGateway } from '@/ports/vault-gateway';
@@ -37,7 +39,7 @@ export default class CuriosityDashboardPlugin extends Plugin {
   override async onload(): Promise<void> {
     this.unloaded = false;
     this.settings = parseSettings(await this.loadData());
-    this.gateway = new ObsidianVaultGateway(this.app);
+    this.gateway = new ObsidianVaultGateway(this.app, this.manifest?.dir ?? null);
     this.refreshScheduler = new DebouncedRefresh(
       () => this.refreshActiveView(),
       200,
@@ -134,6 +136,14 @@ export default class CuriosityDashboardPlugin extends Plugin {
 
   promptSeedService(): PromptSeedService {
     return new PromptSeedService(this.gateway);
+  }
+
+  ideaCaptureService(): IdeaCaptureService {
+    return new IdeaCaptureService(this.gateway);
+  }
+
+  ideaInboxService(): IdeaInboxService {
+    return new IdeaInboxService(this.gateway);
   }
 
   translator(): Translator {

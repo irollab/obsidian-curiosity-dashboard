@@ -18,6 +18,7 @@ export interface DashboardSettings {
   reviewTemplate: string;
   promptDir: string;
   backgroundPath: string;
+  logoPath: string;
   openOnStartup: boolean;
   defaultTab: 'overview' | 'tasks' | 'workflow' | 'data';
   enableMobileView: boolean;
@@ -36,7 +37,8 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   scriptTemplate: '99-模板/脚本大纲模板.md',
   reviewTemplate: '99-模板/发布复盘模板.md',
   promptDir: '99-模板/codex-提示词',
-  backgroundPath: '',
+  backgroundPath: 'assets/default-background.png',
+  logoPath: 'assets/IROLLAB_light.svg',
   openOnStartup: false,
   defaultTab: 'overview',
   enableMobileView: true,
@@ -61,6 +63,8 @@ export function parseSettings(raw: unknown): DashboardSettings {
     promptDir: nonEmptyStringOr(values.promptDir, DEFAULT_SETTINGS.promptDir),
     backgroundPath:
       typeof values.backgroundPath === 'string' ? values.backgroundPath : DEFAULT_SETTINGS.backgroundPath,
+    logoPath:
+      typeof values.logoPath === 'string' ? values.logoPath : DEFAULT_SETTINGS.logoPath,
     openOnStartup:
       typeof values.openOnStartup === 'boolean' ? values.openOnStartup : DEFAULT_SETTINGS.openOnStartup,
     defaultTab: isDefaultTab(values.defaultTab) ? values.defaultTab : DEFAULT_SETTINGS.defaultTab,
@@ -114,7 +118,8 @@ type TextSettingKey =
   | 'scriptTemplate'
   | 'reviewTemplate'
   | 'promptDir'
-  | 'backgroundPath';
+  | 'backgroundPath'
+  | 'logoPath';
 
 export class DashboardSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: CuriosityDashboardPlugin) {
@@ -134,6 +139,7 @@ export class DashboardSettingTab extends PluginSettingTab {
     this.addText(t('settings.reviewTemplate'), 'reviewTemplate');
     this.addText(t('settings.promptDir'), 'promptDir');
     this.addText(t('settings.backgroundPath'), 'backgroundPath');
+    this.addText(t('settings.logoPath'), 'logoPath');
 
     new Setting(this.containerEl).setName(t('settings.openOnStartup')).addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.openOnStartup).onChange((value) => {

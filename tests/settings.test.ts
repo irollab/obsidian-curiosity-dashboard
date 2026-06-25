@@ -121,7 +121,8 @@ describe('dashboard settings', () => {
       scriptTemplate: '99-模板/脚本大纲模板.md',
       reviewTemplate: '99-模板/发布复盘模板.md',
       promptDir: '99-模板/codex-提示词',
-      backgroundPath: '',
+      backgroundPath: 'assets/default-background.png',
+      logoPath: 'assets/IROLLAB_light.svg',
       openOnStartup: false,
       defaultTab: 'overview',
       enableMobileView: true,
@@ -143,6 +144,7 @@ describe('dashboard settings', () => {
       reviewTemplate: 'templates/review.md',
       promptDir: '自定义/提示词',
       backgroundPath: '',
+      logoPath: '',
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
@@ -183,7 +185,6 @@ describe('dashboard settings', () => {
         topicTemplate: '',
         scriptTemplate: '',
         reviewTemplate: '',
-        backgroundPath: '',
       }),
     ).toEqual(DEFAULT_SETTINGS);
   });
@@ -244,30 +245,31 @@ describe('dashboard settings', () => {
       { kind: 'text', name: 'Script template', value: '99-模板/脚本大纲模板.md' },
       { kind: 'text', name: 'Review template', value: '99-模板/发布复盘模板.md' },
       { kind: 'text', name: 'Prompt template folder', value: '99-模板/codex-提示词' },
-      { kind: 'text', name: 'Background image', value: '' },
+      { kind: 'text', name: 'Background image', value: 'assets/default-background.png' },
+      { kind: 'text', name: 'Logo image', value: 'assets/IROLLAB_light.svg' },
       { kind: 'toggle', name: 'Open on startup', value: false },
       { kind: 'dropdown', name: 'Default tab', value: 'overview' },
       { kind: 'toggle', name: 'Enable simplified mobile view', value: true },
       { kind: 'dropdown', name: 'Language', value: 'auto' },
     ]);
-    expect(obsidianMock.settings[10]?.options).toEqual({
+    expect(obsidianMock.settings[11]?.options).toEqual({
       overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', data: 'Data',
     });
-    expect(obsidianMock.settings[12]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
+    expect(obsidianMock.settings[13]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
   });
 
   it('persists every setting change', async () => {
     const { plugin } = makeTab();
 
-    for (const setting of obsidianMock.settings.slice(0, 9)) {
+    for (const setting of obsidianMock.settings.slice(0, 10)) {
       expect(setting.onChange('  changed  ')).toBeUndefined();
     }
-    expect(obsidianMock.settings[9]?.onChange(true)).toBeUndefined();
-    expect(obsidianMock.settings[10]?.onChange('data')).toBeUndefined();
-    expect(obsidianMock.settings[11]?.onChange(false)).toBeUndefined();
-    expect(obsidianMock.settings[12]?.onChange('zh')).toBeUndefined();
+    expect(obsidianMock.settings[10]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[11]?.onChange('data')).toBeUndefined();
+    expect(obsidianMock.settings[12]?.onChange(false)).toBeUndefined();
+    expect(obsidianMock.settings[13]?.onChange('zh')).toBeUndefined();
 
-    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(13));
+    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(14));
 
     expect(plugin.settings).toEqual({
       topicDir: 'changed',
@@ -281,13 +283,14 @@ describe('dashboard settings', () => {
       reviewTemplate: 'changed',
       promptDir: 'changed',
       backgroundPath: 'changed',
+      logoPath: 'changed',
       openOnStartup: true,
       defaultTab: 'data',
       enableMobileView: false,
       language: 'zh',
       focusHistory: [],
     });
-    expect(plugin.saveSettings).toHaveBeenCalledTimes(13);
+    expect(plugin.saveSettings).toHaveBeenCalledTimes(14);
   });
 
   it('contains save failures at every onChange boundary and shows a notice', async () => {
@@ -304,7 +307,7 @@ describe('dashboard settings', () => {
       expect(result).toBeUndefined();
     }
 
-    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(13));
+    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(14));
     expect(obsidianMock.notices.every((message) => message.includes('disk full'))).toBe(true);
   });
 });

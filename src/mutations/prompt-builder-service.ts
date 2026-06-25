@@ -8,12 +8,18 @@ export interface PromptBuildResult {
   output: string | null;
 }
 
+export interface PromptBuildOptions {
+  ideas?: string[];
+  now?: () => Date;
+}
+
 export function buildPrompt(
   action: WorkflowAction,
   model: DashboardModel,
   settings: DashboardSettings,
-  now: () => Date = () => new Date(),
+  options: PromptBuildOptions = {},
 ): PromptBuildResult {
+  const now = options.now ?? (() => new Date());
   const date = now();
   const context: PromptContext = {
     focus: focusContext(model),
@@ -27,8 +33,17 @@ export function buildPrompt(
     reviewTemplate: settings.reviewTemplate,
     date: formatDate(date),
     week: formatWeek(date),
+    ideas: formatIdeas(options.ideas ?? []),
   };
   return { label: action.label, text: fillPlaceholders(action.body, context), output: action.output };
+}
+
+function formatIdeas(ideas: string[]): string {
+  return ideas
+    .map((idea) => idea.trim())
+    .filter((idea) => idea.length > 0)
+    .map((idea, index) => `${index + 1}. ${idea}`)
+    .join('\n');
 }
 
 function focusContext(model: DashboardModel): PromptContext['focus'] {

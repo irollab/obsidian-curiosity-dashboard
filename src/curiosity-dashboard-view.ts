@@ -16,6 +16,9 @@ import { DashboardRenderer, type AssociationField } from '@/ui/dashboard-rendere
 import { ConfirmStageModal } from '@/ui/confirm-stage-modal';
 import { CreateFileModal, type CreateFileDefaults } from '@/ui/create-file-modal';
 import { WorkPickerModal } from '@/ui/work-picker-modal';
+import { IdeaCaptureModal } from '@/ui/idea-capture-modal';
+import { ideaInboxPath } from '@/data/idea-inbox';
+import type { WorkflowGroup } from '@/domain/workflow';
 
 import type CuriosityDashboardPlugin from './main';
 import { DASHBOARD_VIEW_TYPE } from './constants';
@@ -30,6 +33,7 @@ export class CuriosityDashboardView extends ItemView {
   private persistedTabRevision = 0;
   private tabRevision = 0;
   private lastModel: DashboardModel | null = null;
+  private pendingWorkflowGroup: WorkflowGroup | null = null;
   private creationPromise: Promise<void> | null = null;
   private readonly refreshController: LatestRefresh<DashboardModel>;
   private readonly renderer = new DashboardRenderer();
@@ -119,12 +123,17 @@ export class CuriosityDashboardView extends ItemView {
       switchFocus: (path) => this.switchFocus(path),
       openWorkPicker: () => this.openWorkPicker(),
       createTopic: () => this.runCreate('topic', null),
+      captureIdea: () => this.captureIdea(),
       createScript: (topic) => this.runCreate('script', topic),
       createReview: (topic) => this.runCreate('review', topic),
-      copyPrompt: (action) => this.copyPrompt(action),
+      copyPrompt: (action, ideas) => this.copyPrompt(action, ideas),
       openOutput: (path) => this.openOutput(path),
       seedPromptTemplates: () => this.seedPromptTemplates(),
-    }, this.activeTab, this.t);
+      editIdea: (line, currentText) => this.editIdea(line, currentText),
+      deleteIdea: (line) => this.deleteIdea(line),
+      openWorkflowIdeas: () => this.openWorkflowIdeas(),
+    }, this.activeTab, this.t, this.pendingWorkflowGroup);
+    this.pendingWorkflowGroup = null;
     this.plugin.updateObservedDataPaths(observedReviewPaths(model));
     if (focusActiveTab) activeButton.focus();
   }
@@ -436,12 +445,71 @@ export class CuriosityDashboardView extends ItemView {
     await this.switchFocus(target);
   }
 
-  private async copyPrompt(action: WorkflowAction): Promise<void> {
+  private async captureIdea(): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    const result = await IdeaCaptureModal.ask(this.app, this.t, { showOrganize: true });
+    if (result === null) return;
+    if (result.kind === 'organize') {
+      await this.openWorkflowIdeas();
+      return;
+    }
+    if (this.rejectReadOnlyWrite()) return;
+    const inboxPath = ideaInboxPath(this.plugin.settings.topicInboxDir);
+    try {
+      await this.plugin.ideaCaptureService().capture(inboxPath, result.text, this.t.t('idea.inboxHeading'));
+      new Notice(this.t.t('idea.captured', { path: inboxPath }));
+      await this.refresh();
+      await this.openWorkflowIdeas();
+    } catch (error) {
+      this.showActionError('idea.captureFailed', error);
+    }
+  }
+
+  private async editIdea(line: number, currentText: string): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    const result = await IdeaCaptureModal.ask(this.app, this.t, {
+      initial: currentText,
+      heading: this.t.t('idea.editHeading'),
+    });
+    if (result === null || result.kind !== 'save') return;
+    if (this.rejectReadOnlyWrite()) return;
+    const inboxPath = ideaInboxPath(this.plugin.settings.topicInboxDir);
+    try {
+      await this.plugin.ideaInboxService().edit(inboxPath, line, result.text);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('idea.editFailed', error);
+    }
+  }
+
+  private async deleteIdea(line: number): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    const inboxPath = ideaInboxPath(this.plugin.settings.topicInboxDir);
+    try {
+      await this.plugin.ideaInboxService().delete(inboxPath, line);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('idea.deleteFailed', error);
+    }
+  }
+
+  private async openWorkflowIdeas(): Promise<void> {
+    this.pendingWorkflowGroup = '选题';
+    if (this.activeTab === 'workflow') {
+      if (this.lastModel !== null) this.renderModel(this.lastModel, true);
+      return;
+    }
+    await this.selectTab('workflow');
+  }
+
+  private async copyPrompt(action: WorkflowAction, ideas?: string[]): Promise<void> {
     if (this.lastModel === null) {
       new Notice(this.t.t('view.notLoadedCreate'));
       return;
     }
-    const result = buildPrompt(action, this.lastModel, this.plugin.settings);
+    const result = buildPrompt(
+      action, this.lastModel, this.plugin.settings, ideas === undefined ? {} : { ideas },
+    );
     try {
       await navigator.clipboard.writeText(result.text);
       new Notice(this.t.t('workflow.copied', {

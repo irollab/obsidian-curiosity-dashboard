@@ -3,7 +3,10 @@ import { type App, TFile, TFolder, normalizePath } from 'obsidian';
 import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 
 export class ObsidianVaultGateway implements VaultGateway {
-  constructor(private readonly app: App) {}
+  constructor(
+    private readonly app: App,
+    private readonly pluginDir: string | null = null,
+  ) {}
 
   listPaths(): string[] {
     return this.app.vault.getFiles().map((file) => file.path);
@@ -46,7 +49,12 @@ export class ObsidianVaultGateway implements VaultGateway {
 
   resourceUrl(path: string): string | null {
     const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
-    return file instanceof TFile ? this.app.vault.getResourcePath(file) : null;
+    if (file instanceof TFile) return this.app.vault.getResourcePath(file);
+    // 插件内置资产（assets/ 前缀）：从插件目录解析，而非 vault。
+    if (this.pluginDir !== null && /^assets\//.test(path.replace(/^\/+/, ''))) {
+      return this.app.vault.adapter.getResourcePath(normalizePath(`${this.pluginDir}/${path}`));
+    }
+    return null;
   }
 
   private requireFile(path: string): TFile {

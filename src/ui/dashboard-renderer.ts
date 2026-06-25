@@ -1,6 +1,6 @@
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
-import type { WorkflowAction } from '@/domain/workflow';
+import type { WorkflowAction, WorkflowGroup } from '@/domain/workflow';
 import type { Translator } from '@/i18n/translator';
 
 import { renderHero } from './renderers/hero';
@@ -25,11 +25,15 @@ export interface DashboardHandlers {
   switchFocus(path: string): Promise<void>;
   openWorkPicker(): Promise<void>;
   createTopic(): Promise<void>;
+  captureIdea(): Promise<void>;
   createScript(topic: TopicRecord): Promise<void>;
   createReview(topic: TopicRecord): Promise<void>;
-  copyPrompt(action: WorkflowAction): Promise<void>;
+  copyPrompt(action: WorkflowAction, ideas?: string[]): Promise<void>;
   openOutput(path: string): Promise<void>;
   seedPromptTemplates(): Promise<void>;
+  editIdea(line: number, text: string): Promise<void>;
+  deleteIdea(line: number): Promise<void>;
+  openWorkflowIdeas(): Promise<void>;
 }
 
 export class DashboardRenderer {
@@ -39,6 +43,7 @@ export class DashboardRenderer {
     handlers: DashboardHandlers,
     activeTab: DashboardTab,
     t: Translator,
+    initialWorkflowGroup: WorkflowGroup | null = null,
   ): HTMLButtonElement {
     container.empty();
     container.addClass('curiosity-dashboard');
@@ -110,7 +115,7 @@ export class DashboardRenderer {
         renderChannelPulse(panel, model, handlers.openPath, t);
         renderQuickActions(panel, model, handlers, t);
       } else if (id === 'workflow') {
-        renderWorkflowDeck(panel, model, handlers, t);
+        renderWorkflowDeck(panel, model, handlers, t, initialWorkflowGroup);
       } else if (id === 'tasks') {
         renderMissionControl(panel, model, handlers, t);
         renderThisWeek(panel, model, handlers.openPath, t);

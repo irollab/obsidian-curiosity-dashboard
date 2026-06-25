@@ -20,17 +20,17 @@ const action: WorkflowAction = {
 function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
   return {
     associationCandidates: { assetPath: [], reviewPath: [], scriptPath: [] },
-    backgroundUrl: null, commentEvidence: [], focus: { kind: 'none' },
+    backgroundUrl: null, logoUrl: null, commentEvidence: [], focus: { kind: 'none' },
     focusCandidates: [], pickableTopics: [], tasks: [], thisWeek: [], queue: [],
     metrics: [], reviewPath: null, mobileReadOnly: false,
-    workflowActions: [action], promptTemplatesPresent: true, promptTemplatesSkipped: [],
+    workflowActions: [action], promptTemplatesPresent: true, promptTemplatesSkipped: [], ideas: [],
     ...overrides,
   };
 }
 
 describe('buildPrompt', () => {
   it('用设置目录填充占位符并回传输出位置', () => {
-    const result: PromptBuildResult = buildPrompt(action, model(), DEFAULT_SETTINGS, () => new Date('2026-06-25T00:00:00'));
+    const result: PromptBuildResult = buildPrompt(action, model(), DEFAULT_SETTINGS, { now: () => new Date('2026-06-25T00:00:00') });
     expect(result.text).toBe('评估 10-选题池/待评估 焦点 ');
     expect(result.output).toBe('10-选题池/待评估');
     expect(result.label).toBe('批量评估');
@@ -44,7 +44,15 @@ describe('buildPrompt', () => {
         homepageFocus: true, scriptPath: null, assetPath: null, reviewPath: null,
       } },
     });
-    const result = buildPrompt({ ...action, body: '焦点 {{focus_title}} 第{{focus_issue}}期' }, focused, DEFAULT_SETTINGS, () => new Date('2026-06-25T00:00:00'));
+    const result = buildPrompt({ ...action, body: '焦点 {{focus_title}} 第{{focus_issue}}期' }, focused, DEFAULT_SETTINGS, { now: () => new Date('2026-06-25T00:00:00') });
     expect(result.text).toBe('焦点 Codex首页 第39期');
+  });
+
+  it('把选中的灵感按序号填入 {{ideas}}', () => {
+    const result = buildPrompt(
+      { ...action, body: '想法：\n{{ideas}}' }, model(), DEFAULT_SETTINGS,
+      { ideas: ['  做一期 Codex 选题 ', '', '评论区那个问题'], now: () => new Date('2026-06-25T00:00:00') },
+    );
+    expect(result.text).toBe('想法：\n1. 做一期 Codex 选题\n2. 评论区那个问题');
   });
 });

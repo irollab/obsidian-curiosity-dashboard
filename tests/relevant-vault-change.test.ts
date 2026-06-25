@@ -18,6 +18,7 @@ const settings = {
   reviewTemplate: '99-模板/复盘.md',
   promptDir: '99-模板/codex-提示词',
   backgroundPath: '80-制作资产/背景图.png',
+  logoPath: '',
   openOnStartup: false,
   defaultTab: 'overview' as const,
   enableMobileView: true,

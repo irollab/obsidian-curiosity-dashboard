@@ -34,6 +34,7 @@ export interface PromptContext {
   reviewTemplate: string;
   date: string;
   week: string;
+  ideas: string;
 }
 
 const TOKEN = /\{\{(\w+)\}\}/g;
@@ -64,5 +65,6 @@ function tokenValues(context: PromptContext): Record<string, string> {
     review_template: context.reviewTemplate,
     date: context.date,
     week: context.week,
+    ideas: context.ideas,
   };
 }

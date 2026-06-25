@@ -6,7 +6,7 @@ const REQUIRED_TOKENS = {
   '--curiosity-bg': '#05060d',
   '--curiosity-panel': '#10121f',
   '--curiosity-panel-2': '#181b28',
-  '--curiosity-line': '#303447',
+  '--curiosity-line': 'rgba(255, 255, 255, 0.32)',
   '--curiosity-text': '#f7f8ff',
   '--curiosity-blue': '#0a84ff',
   '--curiosity-cyan': '#00e5ff',

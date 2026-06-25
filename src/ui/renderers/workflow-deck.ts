@@ -1,4 +1,4 @@
-import type { DashboardModel, TopicRecord } from '@/domain/models';
+import type { DashboardModel, IdeaEntry, TopicRecord } from '@/domain/models';
 import { STAGES, type Stage } from '@/domain/stages';
 import type { WorkflowAction, WorkflowGroup } from '@/domain/workflow';
 import type { Translator } from '@/i18n/translator';
@@ -11,6 +11,7 @@ export function renderWorkflowDeck(
   model: DashboardModel,
   handlers: DashboardHandlers,
   t: Translator,
+  initialGroup: WorkflowGroup | null = null,
 ): void {
   const section = parent.createEl('section', { cls: 'curiosity-section curiosity-workflow' });
   renderWindowTitlebar(section, t.t('tab.workflow'));
@@ -47,7 +48,11 @@ export function renderWorkflowDeck(
   const firstGroup = groups[0];
   if (firstGroup === undefined) return;
   const activeGroup =
-    focusStage !== null && groups.includes(focusStage) ? focusStage : firstGroup;
+    initialGroup !== null && groups.includes(initialGroup)
+      ? initialGroup
+      : focusStage !== null && groups.includes(focusStage)
+        ? focusStage
+        : firstGroup;
 
   renderSegmentedGroups(section, groups, activeGroup, model, handlers, t);
 }
@@ -106,6 +111,10 @@ function renderCard(
   card.createEl('h3', { text: action.label });
   if (action.description.length > 0) card.createEl('p', { text: action.description });
 
+  const isIdeas = action.id === 'collect-ideas';
+  const checks: Array<{ text: string; input: HTMLInputElement }> = [];
+  if (isIdeas) renderIdeaList(card, model.ideas, checks, handlers, t);
+
   const blockedNoFocus = action.needsFocus && focusTopic(model) === null;
   const buttons = card.createDiv({ cls: 'curiosity-workflow-actions' });
 
@@ -115,7 +124,7 @@ function renderCard(
   });
   copy.disabled = blockedNoFocus;
   if (blockedNoFocus) copy.setAttr('title', t.t('workflow.needsFocus'));
-  else copy.addEventListener('click', () => void handlers.copyPrompt(action));
+  else copy.addEventListener('click', () => void handlers.copyPrompt(action, isIdeas ? selectedIdeas(checks) : undefined));
 
   if (action.output === null) {
     card.createEl('p', { cls: 'curiosity-workflow-readonly', text: t.t('workflow.readonlyOutput') });
@@ -125,6 +134,48 @@ function renderCard(
     });
     const output = action.output;
     open.addEventListener('click', () => void handlers.openOutput(output));
+  }
+}
+
+function selectedIdeas(checks: Array<{ text: string; input: HTMLInputElement }>): string[] {
+  const checked = checks.filter((c) => c.input.checked).map((c) => c.text);
+  return checked.length > 0 ? checked : checks.map((c) => c.text);
+}
+
+function renderIdeaList(
+  card: HTMLElement,
+  ideas: IdeaEntry[],
+  checks: Array<{ text: string; input: HTMLInputElement }>,
+  handlers: DashboardHandlers,
+  t: Translator,
+): void {
+  if (ideas.length === 0) {
+    card.createEl('p', { cls: 'curiosity-idea-empty', text: t.t('idea.listEmpty') });
+    return;
+  }
+  const list = card.createDiv({ cls: 'curiosity-idea-list' });
+  for (const idea of ideas) {
+    const row = list.createDiv({ cls: 'curiosity-idea-row' });
+    const input = row.createEl('input', {
+      cls: 'curiosity-idea-check',
+      attr: { type: 'checkbox', 'aria-label': idea.text },
+    });
+    checks.push({ text: idea.text, input });
+    const body = row.createDiv({ cls: 'curiosity-idea-body' });
+    body.createSpan({ cls: 'curiosity-idea-text', text: idea.text });
+    if (idea.recordedAt.length > 0) {
+      body.createSpan({ cls: 'curiosity-idea-time', text: idea.recordedAt });
+    }
+    const edit = row.createEl('button', {
+      cls: 'curiosity-idea-edit', text: t.t('idea.edit'), type: 'button',
+      attr: { 'aria-label': t.t('idea.edit') },
+    });
+    edit.addEventListener('click', () => void handlers.editIdea(idea.line, idea.text));
+    const remove = row.createEl('button', {
+      cls: 'curiosity-idea-delete', text: t.t('idea.delete'), type: 'button',
+      attr: { 'aria-label': t.t('idea.delete') },
+    });
+    remove.addEventListener('click', () => void handlers.deleteIdea(idea.line));
   }
 }
 
