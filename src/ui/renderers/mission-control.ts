@@ -4,7 +4,7 @@ import type { Translator } from '@/i18n/translator';
 
 import type { AssociationField, DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
-import { renderWindowTitlebar } from './window-frame';
+import { focusMeta, renderWindowTitlebar } from './window-frame';
 
 export function renderMissionControl(
   parent: HTMLElement,
@@ -22,7 +22,7 @@ export function renderMissionControl(
   });
   renderWindowTitlebar(windowEl, t.t('mission.title'), {
     titleId: 'curiosity-mission-title',
-    meta: t.t('mission.issue', { issue: topic.issue, title: topic.title }),
+    ...focusMeta(model, t),
   });
   renderStages(windowEl, currentStage, t);
   const helpIds = renderWriteHelp(windowEl, model.mobileReadOnly, currentStage, t);

@@ -4,7 +4,7 @@ import type { WorkflowAction, WorkflowGroup } from '@/domain/workflow';
 import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
-import { renderWindowTitlebar } from './window-frame';
+import { focusMeta, renderWindowTitlebar } from './window-frame';
 
 export function renderWorkflowDeck(
   parent: HTMLElement,
@@ -14,7 +14,7 @@ export function renderWorkflowDeck(
   initialGroup: WorkflowGroup | null = null,
 ): void {
   const section = parent.createEl('section', { cls: 'curiosity-section curiosity-workflow' });
-  renderWindowTitlebar(section, t.t('tab.workflow'));
+  renderWindowTitlebar(section, t.t('tab.workflow'), focusMeta(model, t));
 
   if (!model.promptTemplatesPresent) {
     renderEmpty(section, handlers, t);

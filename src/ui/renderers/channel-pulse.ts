@@ -2,7 +2,7 @@ import type { DashboardModel, MetricRow } from '@/domain/models';
 import type { TranslationKey } from '@/i18n/translations';
 import type { Translator } from '@/i18n/translator';
 
-import { renderWindowTitlebar } from './window-frame';
+import { focusMeta, renderWindowTitlebar } from './window-frame';
 
 type MetricKey = keyof MetricRow;
 
@@ -28,7 +28,7 @@ export function renderChannelPulse(
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-channel-pulse',
   });
-  renderWindowTitlebar(section, t.t('pulse.title'));
+  renderWindowTitlebar(section, t.t('pulse.title'), focusMeta(model, t));
 
   if (model.metrics.length === 0) {
     section.createEl('p', { text: t.t('pulse.empty') });

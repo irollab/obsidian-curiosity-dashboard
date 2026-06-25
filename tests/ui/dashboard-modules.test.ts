@@ -516,3 +516,30 @@ describe('workflow deck tab', () => {
     expect(findByText(root, '生成默认提示词模板')).not.toBeNull();
   });
 });
+
+describe('window titlebar focus meta', () => {
+  // 标题栏元数据定位用 cls 而非 findByText：workflow tab 下「工作流」会先命中 tab 按钮（后序遍历）。
+  const ISSUE_TEXT = '第 39 期 — Obsidian 太像文件夹，我用 Codex 重做了首页';
+
+  it('渠道脉搏标题栏显示当前焦点选题的期数与标题', () => {
+    const { root } = render(model(), 'data');
+    const pulse = findAll(root, (element) => element.classList.has('curiosity-channel-pulse'))[0]!;
+    const issue = findAll(pulse, (element) => element.classList.has('curiosity-window-issue'));
+    expect(issue).toHaveLength(1);
+    expect(issue[0]?.textContent).toBe(ISSUE_TEXT);
+  });
+
+  it('工作流标题栏显示当前焦点选题的期数与标题', () => {
+    const { root } = render(model({ promptTemplatesPresent: true }), 'workflow');
+    const deck = findAll(root, (element) => element.classList.has('curiosity-workflow'))[0]!;
+    const issue = findAll(deck, (element) => element.classList.has('curiosity-window-issue'));
+    expect(issue).toHaveLength(1);
+    expect(issue[0]?.textContent).toBe(ISSUE_TEXT);
+  });
+
+  it('无焦点时渠道脉搏标题栏不渲染期数元数据', () => {
+    const { root } = render(model({ focus: { kind: 'none' } }), 'data');
+    const pulse = findAll(root, (element) => element.classList.has('curiosity-channel-pulse'))[0]!;
+    expect(findAll(pulse, (element) => element.classList.has('curiosity-window-issue'))).toHaveLength(0);
+  });
+});
