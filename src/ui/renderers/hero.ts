@@ -12,7 +12,9 @@ export function renderHero(
 ): void {
   const hero = parent.createEl('header', { cls: 'curiosity-hero' });
   if (model.backgroundUrl !== null) {
-    hero.style.setProperty('--curiosity-background', cssBackgroundUrl(model.backgroundUrl));
+    // 设在共同父节点（shell）上，让 hero 与 content 都能继承该背景图变量，
+    // 内容区面板的水玻璃 backdrop-filter 才有图可模糊。
+    parent.style.setProperty('--curiosity-background', cssBackgroundUrl(model.backgroundUrl));
   }
 
   const menu = hero.createDiv({
@@ -23,7 +25,6 @@ export function renderHero(
   menu.createSpan({ cls: 'curiosity-menu-context', text: t.t('hero.context') });
 
   const body = hero.createDiv({ cls: 'curiosity-hero-body' });
-  body.createDiv({ cls: 'curiosity-kicker', text: t.t('hero.kicker') });
   body.createEl('h1', { cls: 'curiosity-hero-title', text: t.t('hero.title') });
 
   if (model.focus.kind === 'none') {
@@ -58,7 +59,10 @@ export function renderHero(
     stage === null ? t.t('stage.unknown') : t.stageLabel(stage),
     stage === null ? 'is-invalid' : 'is-stage',
   );
-  factCard(facts, t.t('hero.nextActionLabel'), topic.nextAction ?? t.t('hero.nextActionUnset'), 'is-next');
+  // 下一步：手动 next_action 优先；否则自动取本期清单第一个未勾选项；都没有才显示未设置。
+  const firstPendingTask = model.tasks.find((task) => !task.checked)?.text ?? null;
+  const nextAction = topic.nextAction ?? firstPendingTask;
+  factCard(facts, t.t('hero.nextActionLabel'), nextAction ?? t.t('hero.nextActionUnset'), 'is-next');
 
   const actions = body.createDiv({ cls: 'curiosity-hero-actions' });
   const scriptPath = topic.scriptPath;

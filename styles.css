@@ -19,6 +19,10 @@
   --curiosity-pink: #ff375f;
   --curiosity-orange: #ff9f0a;
   --curiosity-muted: #a7adbe;
+  --curiosity-glass-border: rgba(255, 255, 255, 0.14);
+  --curiosity-glass-card-bg: rgba(24, 27, 40, 0.42);
+  --curiosity-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --curiosity-glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   --curiosity-radius-window: 22px;
   --curiosity-radius-card: 16px;
   --curiosity-display-font: "Smiley Sans", Georgia, "Times New Roman", "Songti SC", serif;
@@ -182,9 +186,9 @@
   gap: 18px;
   padding: 16px 18px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--curiosity-glass-border);
   border-radius: 16px;
-  background: rgba(16, 18, 31, 0.68);
+  background: var(--curiosity-glass-card-bg);
   -webkit-backdrop-filter: blur(18px) saturate(120%);
   backdrop-filter: blur(18px) saturate(120%);
 }
@@ -398,19 +402,21 @@
   width: min(100%, 1680px);
   margin-inline: auto;
   padding: 56px clamp(20px, 3.8vw, 64px) 40px;
+  background: var(--curiosity-bg);
 }
 
 .curiosity-dashboard .curiosity-view-tabs {
   display: grid;
   width: fit-content;
   max-width: 100%;
-  grid-template-columns: repeat(3, minmax(86px, 1fr));
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
   gap: 3px;
   margin: 0 0 24px;
   padding: 3px;
-  border: 1px solid var(--curiosity-line);
+  border: 1px solid var(--curiosity-glass-border);
   border-radius: 12px;
-  background: #0c0e17;
+  background: transparent;
+  box-shadow: var(--curiosity-glass-shadow), var(--curiosity-glass-highlight);
 }
 
 .curiosity-dashboard .curiosity-view-tabs button {
@@ -464,7 +470,7 @@
   overflow: hidden;
   border: 1px solid var(--curiosity-line);
   border-radius: var(--curiosity-radius-window);
-  background: var(--curiosity-panel);
+  background: transparent;
 }
 
 .curiosity-dashboard .curiosity-mission {
@@ -511,7 +517,7 @@
   margin: 0;
   color: #ffffff;
   font-family: var(--curiosity-display-font);
-  font-size: 12px;
+  font-size: clamp(1.05rem, 1.5vw, 1.35rem);
   font-weight: 700;
   letter-spacing: 0.01em;
   text-align: center;
@@ -549,7 +555,7 @@
   padding: 4px;
   border: 1px solid var(--curiosity-line);
   border-radius: 12px;
-  background: #0c0e17;
+  background: rgba(12, 14, 23, 0.45);
   list-style: none;
 }
 
@@ -610,7 +616,7 @@
   padding: 18px;
   border: 1px solid var(--curiosity-line);
   border-radius: var(--curiosity-radius-card);
-  background: var(--curiosity-panel-2);
+  background: var(--curiosity-glass-card-bg);
 }
 
 .curiosity-dashboard .curiosity-subcard h3,
@@ -642,7 +648,7 @@
   width: 100%;
   min-height: 40px;
   border-color: transparent;
-  background: #121521;
+  background: rgba(18, 21, 33, 0.5);
 }
 
 .curiosity-dashboard .curiosity-task {
@@ -700,20 +706,14 @@
 .curiosity-dashboard .curiosity-section {
   min-width: 0;
   padding: 22px;
-  border: 1px solid var(--curiosity-line);
+  border: 1px solid var(--curiosity-glass-border);
   border-radius: var(--curiosity-radius-window);
-  background: var(--curiosity-panel);
+  background: transparent;
+  box-shadow: var(--curiosity-glass-shadow), var(--curiosity-glass-highlight);
 }
 
-.curiosity-dashboard .curiosity-section > h2 {
-  margin: 0 0 18px;
-  color: #ffffff;
-  font-family: var(--curiosity-display-font);
-  font-size: clamp(1.5rem, 2vw, 2rem);
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.035em;
-  line-height: 1;
+.curiosity-dashboard .curiosity-section > .curiosity-titlebar {
+  margin: -22px -22px 18px;
 }
 
 .curiosity-dashboard .curiosity-this-week {
@@ -728,15 +728,6 @@
 
 .curiosity-dashboard .curiosity-production-queue {
   grid-area: queue;
-  padding-inline: 0;
-  border-inline: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.curiosity-dashboard .curiosity-production-queue > h2,
-.curiosity-dashboard .curiosity-production-queue > .curiosity-overflow-count {
-  margin-inline: 22px;
 }
 
 .curiosity-dashboard .curiosity-channel-pulse {
@@ -798,7 +789,7 @@
   padding: 14px;
   border: 1px solid var(--curiosity-line);
   border-radius: var(--curiosity-radius-card);
-  background: var(--curiosity-panel-2);
+  background: var(--curiosity-glass-card-bg);
 }
 
 .curiosity-dashboard .curiosity-week-stat-label {
@@ -824,7 +815,9 @@
   position: relative;
   min-height: 164px;
   padding: 22px;
+  border: 1px solid var(--curiosity-line);
   border-radius: 18px;
+  background: var(--curiosity-glass-card-bg);
 }
 
 .curiosity-dashboard .curiosity-card-edge {
@@ -1413,13 +1406,97 @@
 
 .curiosity-dashboard .curiosity-workflow-focus { opacity: .85; margin: 0 0 .75rem; font-size: .9em; }
 .curiosity-dashboard .curiosity-workflow-skipped { color: var(--text-warning); font-size: .8em; margin: 0 0 .6rem; }
-.curiosity-dashboard .curiosity-workflow-group { margin-bottom: .5rem; }
-.curiosity-dashboard .curiosity-workflow-group.is-focus > summary { font-weight: 600; }
-.curiosity-dashboard .curiosity-workflow-group > summary { cursor: pointer; padding: .35rem 0; }
-.curiosity-dashboard .curiosity-workflow-cards { display: grid; gap: .6rem; padding: .4rem 0 .6rem; }
-.curiosity-dashboard .curiosity-workflow-card { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: .7rem .8rem; background: var(--background-secondary); }
+.curiosity-dashboard .curiosity-segmented {
+  display: flex;
+  gap: 3px;
+  margin: 0 0 16px;
+  padding: 3px;
+  border: 1px solid var(--curiosity-glass-border);
+  border-radius: 999px;
+  background: var(--curiosity-glass-card-bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.curiosity-dashboard .curiosity-segmented::-webkit-scrollbar { display: none; }
+.curiosity-dashboard .curiosity-segment {
+  flex: 1 0 auto;
+  min-height: 32px;
+  padding: 6px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--curiosity-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.curiosity-dashboard .curiosity-segment.is-active {
+  background: var(--curiosity-green);
+  color: #001b08;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.18);
+}
+.curiosity-dashboard .curiosity-segment:hover:not(:disabled),
+.curiosity-dashboard .curiosity-segment:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--curiosity-text);
+}
+.curiosity-dashboard .curiosity-segment.is-active:hover:not(:disabled),
+.curiosity-dashboard .curiosity-segment.is-active:active:not(:disabled) {
+  background: var(--curiosity-green);
+  color: #001b08;
+}
+.curiosity-dashboard .curiosity-workflow-panel[hidden] { display: none; }
+.curiosity-dashboard .curiosity-workflow-cards { display: grid; gap: .6rem; padding: .2rem 0 .4rem; }
+.curiosity-dashboard .curiosity-workflow-card { border: 1px solid var(--curiosity-line); border-radius: 10px; padding: .7rem .8rem; background: var(--curiosity-glass-card-bg); }
+.curiosity-dashboard .curiosity-window,
+.curiosity-dashboard .curiosity-view-tabs,
+.curiosity-dashboard .curiosity-section {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.curiosity-dashboard .curiosity-window::before,
+.curiosity-dashboard .curiosity-view-tabs::before,
+.curiosity-dashboard .curiosity-section::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  background-image: var(--curiosity-background, none);
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+  filter: blur(20px) saturate(140%) brightness(0.5);
+  pointer-events: none;
+}
 .curiosity-dashboard .curiosity-workflow-card h3 { margin: 0 0 .25rem; font-size: 1em; }
 .curiosity-dashboard .curiosity-workflow-card p { margin: 0 0 .5rem; opacity: .8; font-size: .85em; }
 .curiosity-dashboard .curiosity-workflow-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.curiosity-dashboard .curiosity-workflow-copy {
+  background: #ff5f57;
+  border-color: #ff5f57;
+  color: #2a0000;
+}
+.curiosity-dashboard .curiosity-workflow-copy:hover:not(:disabled),
+.curiosity-dashboard .curiosity-workflow-copy:active:not(:disabled) {
+  background: #ff7b74;
+  border-color: #ff7b74;
+}
+.curiosity-dashboard .curiosity-workflow-copy:disabled {
+  background: var(--curiosity-panel-2);
+  border-color: var(--curiosity-line);
+  color: var(--curiosity-muted);
+}
+.curiosity-dashboard .curiosity-workflow-open {
+  background: #febc2e;
+  border-color: #febc2e;
+  color: #2a1c00;
+}
+.curiosity-dashboard .curiosity-workflow-open:hover:not(:disabled),
+.curiosity-dashboard .curiosity-workflow-open:active:not(:disabled) {
+  background: #ffca54;
+  border-color: #ffca54;
+  color: #2a1c00;
+}
 .curiosity-dashboard .curiosity-workflow-readonly { font-size: .8em; opacity: .7; margin-top: .4rem; }
 .curiosity-dashboard .curiosity-workflow-empty { text-align: center; padding: 1.5rem 1rem; }

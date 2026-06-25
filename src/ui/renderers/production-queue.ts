@@ -1,6 +1,8 @@
 import type { TopicRecord } from '@/domain/models';
 import type { Translator } from '@/i18n/translator';
 
+import { renderWindowTitlebar } from './window-frame';
+
 const VISIBLE_LIMIT = 6;
 
 export function renderProductionQueue(
@@ -12,7 +14,7 @@ export function renderProductionQueue(
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-production-queue',
   });
-  section.createEl('h2', { text: t.t('queue.title') });
+  renderWindowTitlebar(section, t.t('queue.title'));
   const grid = section.createDiv({ cls: 'curiosity-queue-grid' });
   if (topics.length === 0) {
     grid.createEl('p', { text: t.t('queue.empty') });

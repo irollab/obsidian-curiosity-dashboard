@@ -3,6 +3,7 @@ import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
+import { renderWindowTitlebar } from './window-frame';
 
 export function renderQuickActions(
   parent: HTMLElement,
@@ -13,7 +14,7 @@ export function renderQuickActions(
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-quick-actions',
   });
-  section.createEl('h2', { text: t.t('quickActions.title') });
+  renderWindowTitlebar(section, t.t('quickActions.title'));
   const actions = section.createDiv({ cls: 'curiosity-actions' });
   createButton(actions, t.t('action.createTopicCard'), model.mobileReadOnly, handlers.createTopic, t);
 

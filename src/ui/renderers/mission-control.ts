@@ -4,6 +4,7 @@ import type { Translator } from '@/i18n/translator';
 
 import type { AssociationField, DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
+import { renderWindowTitlebar } from './window-frame';
 
 export function renderMissionControl(
   parent: HTMLElement,
@@ -19,7 +20,10 @@ export function renderMissionControl(
     cls: 'curiosity-window curiosity-mission',
     attr: { 'aria-labelledby': 'curiosity-mission-title' },
   });
-  renderTitlebar(windowEl, topic, t);
+  renderWindowTitlebar(windowEl, t.t('mission.title'), {
+    titleId: 'curiosity-mission-title',
+    meta: t.t('mission.issue', { issue: topic.issue, title: topic.title }),
+  });
   renderStages(windowEl, currentStage, t);
   const helpIds = renderWriteHelp(windowEl, model.mobileReadOnly, currentStage, t);
 
@@ -43,26 +47,6 @@ export function renderMissionControl(
   else {
     bindGuardedAction(advance, () => handlers.confirmAdvance(topic.path, currentStage));
   }
-}
-
-function renderTitlebar(parent: HTMLElement, topic: TopicRecord, t: Translator): void {
-  const bar = parent.createDiv({ cls: 'curiosity-titlebar' });
-  const dots = bar.createDiv({
-    cls: 'curiosity-traffic-lights',
-    attr: { 'aria-hidden': 'true' },
-  });
-  for (const color of ['red', 'yellow', 'green']) {
-    dots.createSpan({ cls: `curiosity-dot is-${color}` });
-  }
-  bar.createEl('h2', {
-    cls: 'curiosity-window-title',
-    text: t.t('mission.title'),
-    attr: { id: 'curiosity-mission-title' },
-  });
-  bar.createSpan({
-    cls: 'curiosity-window-issue',
-    text: t.t('mission.issue', { issue: topic.issue, title: topic.title }),
-  });
 }
 
 function renderWriteHelp(

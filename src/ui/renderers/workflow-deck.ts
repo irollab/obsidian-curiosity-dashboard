@@ -4,6 +4,7 @@ import type { WorkflowAction, WorkflowGroup } from '@/domain/workflow';
 import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
+import { renderWindowTitlebar } from './window-frame';
 
 export function renderWorkflowDeck(
   parent: HTMLElement,
@@ -12,6 +13,7 @@ export function renderWorkflowDeck(
   t: Translator,
 ): void {
   const section = parent.createEl('section', { cls: 'curiosity-section curiosity-workflow' });
+  renderWindowTitlebar(section, t.t('tab.workflow'));
 
   if (!model.promptTemplatesPresent) {
     renderEmpty(section, handlers, t);
@@ -39,26 +41,61 @@ export function renderWorkflowDeck(
     }
   }
 
-  const groups: WorkflowGroup[] = [...STAGES, 'general'];
-  for (const group of groups) {
-    const actions = model.workflowActions.filter((a) => a.group === group);
-    if (actions.length === 0) continue;
-    const expanded = group === focusStage || (focusStage === null && group === 'general');
-    renderGroup(section, group, actions, expanded, model, handlers, t);
-  }
+  const groups = ([...STAGES, 'general'] as WorkflowGroup[]).filter((group) =>
+    model.workflowActions.some((action) => action.group === group),
+  );
+  const firstGroup = groups[0];
+  if (firstGroup === undefined) return;
+  const activeGroup =
+    focusStage !== null && groups.includes(focusStage) ? focusStage : firstGroup;
+
+  renderSegmentedGroups(section, groups, activeGroup, model, handlers, t);
 }
 
-function renderGroup(
-  parent: HTMLElement, group: WorkflowGroup, actions: WorkflowAction[], expanded: boolean,
-  model: DashboardModel, handlers: DashboardHandlers, t: Translator,
+function renderSegmentedGroups(
+  parent: HTMLElement,
+  groups: WorkflowGroup[],
+  activeGroup: WorkflowGroup,
+  model: DashboardModel,
+  handlers: DashboardHandlers,
+  t: Translator,
 ): void {
-  const details = parent.createEl('details', {
-    cls: expanded ? 'curiosity-workflow-group is-focus' : 'curiosity-workflow-group',
+  const tablist = parent.createDiv({
+    cls: 'curiosity-segmented',
+    attr: { role: 'tablist', 'aria-label': t.t('tab.workflow') },
   });
-  if (expanded) details.setAttr('open', '');
-  details.createEl('summary', { text: groupLabel(group, t) });
-  const list = details.createDiv({ cls: 'curiosity-workflow-cards' });
-  for (const action of actions) renderCard(list, action, model, handlers, t);
+  const panels = parent.createDiv({ cls: 'curiosity-workflow-panels' });
+
+  const entries = groups.map((group) => {
+    const isActive = group === activeGroup;
+    const segment = tablist.createEl('button', {
+      cls: isActive ? 'curiosity-segment is-active' : 'curiosity-segment',
+      text: groupLabel(group, t),
+      type: 'button',
+      attr: { role: 'tab', 'aria-selected': String(isActive) },
+    });
+    const panel = panels.createDiv({
+      cls: 'curiosity-workflow-panel',
+      attr: { role: 'tabpanel' },
+    });
+    panel.hidden = !isActive;
+    const list = panel.createDiv({ cls: 'curiosity-workflow-cards' });
+    for (const action of model.workflowActions.filter((a) => a.group === group)) {
+      renderCard(list, action, model, handlers, t);
+    }
+    return { segment, panel };
+  });
+
+  for (const entry of entries) {
+    entry.segment.addEventListener('click', () => {
+      for (const other of entries) {
+        const on = other === entry;
+        other.segment.classList.toggle('is-active', on);
+        other.segment.setAttr('aria-selected', String(on));
+        other.panel.hidden = !on;
+      }
+    });
+  }
 }
 
 function renderCard(
@@ -73,7 +110,7 @@ function renderCard(
   const buttons = card.createDiv({ cls: 'curiosity-workflow-actions' });
 
   const copy = buttons.createEl('button', {
-    cls: 'curiosity-write-action', text: t.t('workflow.copyButton'), type: 'button',
+    cls: 'curiosity-write-action curiosity-workflow-copy', text: t.t('workflow.copyButton'), type: 'button',
     attr: { 'aria-label': blockedNoFocus ? t.t('workflow.needsFocus') : t.t('workflow.copyButton') },
   });
   copy.disabled = blockedNoFocus;
@@ -83,7 +120,9 @@ function renderCard(
   if (action.output === null) {
     card.createEl('p', { cls: 'curiosity-workflow-readonly', text: t.t('workflow.readonlyOutput') });
   } else {
-    const open = buttons.createEl('button', { text: t.t('workflow.openOutput'), type: 'button' });
+    const open = buttons.createEl('button', {
+      cls: 'curiosity-workflow-open', text: t.t('workflow.openOutput'), type: 'button',
+    });
     const output = action.output;
     open.addEventListener('click', () => void handlers.openOutput(output));
   }

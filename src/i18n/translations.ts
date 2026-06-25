@@ -26,7 +26,7 @@ export type TranslationKey =
   | 'action.createTopicCard' | 'action.createScript' | 'action.createReview'
   | 'action.openScript' | 'action.openReview'
   | 'overflow.items'
-  | 'hero.menuAria' | 'hero.brand' | 'hero.context' | 'hero.kicker' | 'hero.title'
+  | 'hero.menuAria' | 'hero.brand' | 'hero.context' | 'hero.title'
   | 'hero.noFocus' | 'hero.openSettings' | 'hero.multipleTitle' | 'hero.multipleMessage'
   | 'hero.issuePill' | 'hero.currentStageLabel' | 'hero.nextActionLabel' | 'hero.nextActionUnset'
   | 'hero.openScript' | 'hero.viewTopic' | 'hero.switchLabel' | 'hero.focusChip'
@@ -152,7 +152,6 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'hero.menuAria': { zh: '内容工作室菜单栏', en: 'Content Studio menu bar' },
   'hero.brand': { zh: '内容工作室', en: 'Content Studio' },
   'hero.context': { zh: '本地 Markdown 工作区', en: 'Local Markdown Workspace' },
-  'hero.kicker': { zh: '当前任务', en: 'CURRENT MISSION' },
   'hero.title': { zh: '追逐你的好奇心', en: 'Chase your curiosity' },
   'hero.noFocus': { zh: '尚未设置当前作品。', en: 'No current work set yet.' },
   'hero.openSettings': { zh: '打开插件设置', en: 'Open plugin settings' },

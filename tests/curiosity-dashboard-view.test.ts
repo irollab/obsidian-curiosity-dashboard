@@ -472,7 +472,7 @@ describe('CuriosityDashboardView', () => {
         topic: {
           path: '10-选题池/39.md', basename: '39', title: '首页', issue: 39,
           status: '已立项', stage: '制作', priority: null, dueDate: null,
-          nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null,
+          nextAction: '推进制作', homepageFocus: true, scriptPath: null, assetPath: null,
           reviewPath: null,
         },
       },

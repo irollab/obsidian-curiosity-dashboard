@@ -88,10 +88,20 @@ function render(
 
 function section(root: FakeElement, heading: string): FakeElement {
   const title = findByText(root, heading);
-  if (title?.parent === null || title?.parent === undefined) {
+  // 标题现位于 macOS 窗口标题栏内，向上回溯到 section/window 容器。
+  let element: FakeElement | null | undefined = title?.parent;
+  while (
+    element !== null &&
+    element !== undefined &&
+    !element.classList.has('curiosity-section') &&
+    !element.classList.has('curiosity-window')
+  ) {
+    element = element.parent;
+  }
+  if (element === null || element === undefined) {
     throw new Error(`Missing section: ${heading}`);
   }
-  return title.parent;
+  return element;
 }
 
 function topicAt(index: number): TopicRecord {

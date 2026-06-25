@@ -2,6 +2,8 @@ import type { DashboardModel } from '@/domain/models';
 import { STAGES, stageIndex } from '@/domain/stages';
 import type { Translator } from '@/i18n/translator';
 
+import { renderWindowTitlebar } from './window-frame';
+
 const VISIBLE_LIMIT = 8;
 
 export function renderThisWeek(
@@ -13,7 +15,7 @@ export function renderThisWeek(
   const section = parent.createEl('section', {
     cls: 'curiosity-section curiosity-this-week',
   });
-  section.createEl('h2', { text: t.t('thisWeek.title') });
+  renderWindowTitlebar(section, t.t('thisWeek.title'));
 
   const topics = model.thisWeek;
   if (topics.length === 0) {

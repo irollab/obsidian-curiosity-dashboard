@@ -80,14 +80,14 @@ function render(value: DashboardModel, activeTab: 'overview' | 'tasks' | 'data' 
 describe('DashboardRenderer', () => {
   it('renders a safe background and the ready Hero content without using HTML strings', () => {
     const { root } = render(model({ backgroundUrl: 'app://vault/space");color:red).png' }));
-    const hero = findAll(root, (element) => element.classList.has('curiosity-hero'))[0];
+    const shell = findAll(root, (element) => element.classList.has('curiosity-dashboard-shell'))[0];
 
     expect(findByText(root, '追逐你的好奇心')).toBeDefined();
     expect(findByText(root, '第 39 期')).toBeDefined();
     expect(findByText(root, topic.title)).toBeDefined();
     expect(findByText(root, '制作')).toBeDefined();
     expect(findByText(root, '确认视觉结构')).toBeDefined();
-    expect(hero?.style.getPropertyValue('--curiosity-background')).toBe(
+    expect(shell?.style.getPropertyValue('--curiosity-background')).toBe(
       'url("app://vault/space%22%29;color:red%29.png")',
     );
   });

@@ -90,7 +90,7 @@ describe('dashboard stylesheet contract', () => {
     const css = await stylesheet();
     expect(css).not.toMatch(/\.curiosity-(window|section|subcard|queue-card)[^{]*\{[^}]*gradient\(/s);
     expect(css).not.toMatch(/box-shadow\s*:[^;]*(#0a84ff|#00e5ff|#30d158|#bf5af2|#ff375f|#ff9f0a)/);
-    expect(css).toMatch(/\.curiosity-dashboard \.curiosity-window[^}]*background:\s*var\(--curiosity-panel\)/s);
+    expect(css).toMatch(/\.curiosity-dashboard \.curiosity-window[^}]*background:\s*transparent/s);
   });
 
   it('contains responsive, focus, hidden-panel, accessibility, and fallback contracts', async () => {
@@ -176,11 +176,16 @@ describe('dashboard stylesheet contract', () => {
 
   it('styles the workflow deck cards, groups, and empty state inside the dashboard scope', async () => {
     const css = await stylesheet();
-    expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-card {'))
-      .toContain('background: var(--background-secondary)');
-    expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-group > summary'))
-      .toContain('cursor: pointer');
-    expect(css).toContain('.curiosity-dashboard .curiosity-workflow-group.is-focus > summary');
+    const workflowCard = blockAfter(css, '.curiosity-dashboard .curiosity-workflow-card {');
+    // 内容卡统一为半透明叠加层（与任务中心 subcard 一致）
+    expect(workflowCard).toContain('background: var(--curiosity-glass-card-bg)');
+    // 容器（window/section/tab）保持磨砂玻璃：::before + 固定背景图
+    expect(css).toContain('background-attachment: fixed');
+    // 分组改为胶囊分段控制器
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-segmented'))
+      .toContain('border-radius: 999px');
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-segment.is-active'))
+      .toContain('background: var(--curiosity-green)');
     expect(css).toContain('.curiosity-dashboard .curiosity-workflow-skipped');
     expect(blockAfter(css, '.curiosity-dashboard .curiosity-workflow-empty'))
       .toContain('text-align: center');
@@ -191,7 +196,6 @@ describe('dashboard stylesheet contract', () => {
     for (const selector of [
       '.curiosity-dashboard .curiosity-hero-title',
       '.curiosity-dashboard .curiosity-current-title',
-      '.curiosity-dashboard .curiosity-section > h2',
       '.curiosity-dashboard .curiosity-window-title',
       '.curiosity-dashboard .curiosity-issue-pill',
       '.curiosity-modal .curiosity-modal-content h2',
