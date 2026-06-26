@@ -8,14 +8,17 @@ describe('release documentation contract', () => {
     const headings = [...readme.matchAll(/^# (.+)$/gm)].map((match) => match[1]);
 
     expect(headings).toEqual([
-      'What it does',
-      'Screenshots',
-      'Install',
-      'Configure your vault',
-      'Supported data',
-      'Privacy and safety',
-      'Development',
-      'Release files',
+      '这是什么',
+      '功能总览',
+      '截图',
+      '安装',
+      '配置你的 Vault',
+      '快速上手（5 分钟）',
+      '隐私与安全',
+      '兼容的数据格式',
+      '开发',
+      '发布文件',
+      '反馈与联系',
       'License',
     ]);
     expect(readme).toContain(
@@ -35,9 +38,10 @@ describe('release documentation contract', () => {
   it('documents every controlled write including association frontmatter', async () => {
     const readme = await text('README.md');
 
-    expect(readme).toContain(
-      '受控写入 `script_path`、`asset_path` 和 `review_path` 关联字段',
-    );
+    expect(readme).toContain('受控的关联字段');
+    expect(readme).toContain('`script_path`');
+    expect(readme).toContain('`asset_path`');
+    expect(readme).toContain('`review_path`');
   });
 
   it('targets Node 24 CI on Windows and macOS with read-only permissions', async () => {
