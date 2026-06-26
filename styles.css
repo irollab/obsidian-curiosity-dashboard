@@ -463,13 +463,21 @@
   display: grid;
   width: fit-content;
   max-width: 100%;
-  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  /* 按 tab 数量自动生成列、不换行（避免新增 tab 后挤到第二行）。 */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(72px, 1fr);
   gap: 4px;
-  margin: 0 0 20px auto;
+  /* 负上边距把 tab 栏上提进 hero 底部，与「切换当前作品」水平对齐；后续内容随之上移。 */
+  margin: -64px 0 20px auto;
   padding: 4px;
+  position: relative;
+  z-index: 2;
   border: 1px solid var(--curiosity-glass-border);
   border-radius: 14px;
-  background: transparent;
+  /* 上提后压在 hero 图片上，加玻璃模糊背景保证可读性。 */
+  background: rgba(11, 13, 22, 0.5);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
   box-shadow: var(--curiosity-glass-shadow), var(--curiosity-glass-highlight);
 }
 
@@ -983,6 +991,22 @@
 .curiosity-dashboard .curiosity-table-wrapper tbody tr:last-child td {
   border-bottom: 0;
 }
+.curiosity-dashboard .curiosity-table-wrapper .curiosity-pulse-platform {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 700;
+}
+.curiosity-dashboard .curiosity-table-wrapper td.curiosity-pulse-top {
+  font-size: 15px;
+  font-weight: 800;
+}
+.curiosity-dashboard .curiosity-table-wrapper td.curiosity-pulse-top > span {
+  display: inline-block;
+  transform: scale(1.08);
+}
 
 .curiosity-dashboard .curiosity-review-source {
   margin-top: 14px;
@@ -1047,6 +1071,22 @@
   justify-self: center;
   margin-top: 10px;
 }
+
+.curiosity-dashboard .curiosity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 16px 8px;
+  color: var(--curiosity-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.curiosity-dashboard .curiosity-footer-sep { opacity: 0.4; }
+.curiosity-dashboard .curiosity-footer-link { display: inline-flex; align-items: center; gap: 5px; color: var(--curiosity-muted); cursor: pointer; text-decoration: none; }
+.curiosity-dashboard .curiosity-footer-link:hover { color: var(--curiosity-text); }
+.curiosity-dashboard .curiosity-footer-link-icon svg { width: 14px; height: 14px; display: block; }
 
 .curiosity-dashboard .curiosity-dock {
   position: sticky;
@@ -1325,6 +1365,10 @@
 
   .curiosity-dashboard .curiosity-view-tabs {
     width: 100%;
+    /* 窄屏下让各 tab 等分宽度收缩，5 个 tab 仍保持一行。 */
+    grid-auto-columns: minmax(0, 1fr);
+    /* 窄屏全宽 tab 不上提，避免遮挡 hero 内容与误吃点击。 */
+    margin-top: 0;
   }
 
   .curiosity-dashboard .curiosity-view-tabs button {
@@ -1610,3 +1654,46 @@
 }
 .curiosity-dashboard .curiosity-idea-delete:hover:not(:disabled) { background: #ff5f57; border-color: #ff5f57; color: #2a0000; }
 .curiosity-dashboard .curiosity-workflow-empty { text-align: center; padding: 1.5rem 1rem; }
+.curiosity-dashboard .curiosity-discover-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.curiosity-dashboard .curiosity-discover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.curiosity-dashboard .curiosity-discover-col {
+  /* 更不透明的卡片背景框，避免文字直接压在背景图上看不清。 */
+  min-width: 0;
+  background: rgba(16, 19, 30, 0.78);
+  border: 1px solid var(--curiosity-glass-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.curiosity-dashboard .curiosity-discover-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+.curiosity-dashboard .curiosity-discover-row + .curiosity-discover-row { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.curiosity-dashboard .curiosity-discover-body { display: flex; flex-direction: column; min-width: 0; }
+.curiosity-dashboard .curiosity-discover-text { word-break: break-word; }
+.curiosity-dashboard .curiosity-discover-date,
+.curiosity-dashboard .curiosity-discover-kind { font-size: 0.8em; opacity: 0.65; }
+.curiosity-dashboard .curiosity-discover-meta { display: flex; gap: 8px; align-items: center; font-size: 0.78em; opacity: 0.65; }
+.curiosity-dashboard .curiosity-discover-source-tag { padding: 0 6px; border-radius: 6px; border: 1px solid transparent; background: rgba(255, 255, 255, 0.08); font-weight: 600; }
+.curiosity-dashboard .curiosity-discover-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.curiosity-dashboard .curiosity-discover-filter-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid transparent; font-size: 0.8em; font-weight: 600; cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; background: rgba(255,255,255,0.06); color: var(--curiosity-text); }
+.curiosity-dashboard .curiosity-discover-filter-chip.is-focus { box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
+.curiosity-dashboard .curiosity-discover-filter-chip.is-dim { opacity: 0.35; filter: grayscale(0.5); }
+.curiosity-dashboard .curiosity-discover-filter-all { background: rgba(255,255,255,0.1); color: var(--curiosity-muted); }
+.curiosity-dashboard .curiosity-discover-link { cursor: pointer; color: var(--curiosity-blue); text-decoration: none; }
+.curiosity-dashboard .curiosity-discover-link:hover { text-decoration: underline; }
+.curiosity-dashboard .curiosity-discover-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 8px; }
+.curiosity-dashboard .curiosity-discover-page-info { font-size: 0.8em; opacity: 0.7; }
+.curiosity-dashboard .curiosity-discover-page-btn { padding: 2px 10px; border: 1px solid var(--curiosity-line); border-radius: 8px; background: var(--curiosity-glass-card-bg); color: var(--curiosity-text); cursor: pointer; }
+.curiosity-dashboard .curiosity-discover-page-btn:disabled { opacity: 0.4; cursor: default; }
+.curiosity-dashboard .curiosity-discover-source-failed { color: var(--text-warning); font-size: 0.85em; }
+.curiosity-dashboard .curiosity-discover-empty { opacity: 0.7; }
+.curiosity-dashboard .curiosity-discover-stale { font-size: 0.8em; opacity: 0.6; margin: 0 0 8px; }
+.curiosity-dashboard .curiosity-discover-template-missing {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--curiosity-glass-border); background: rgba(10, 132, 255, 0.12);
+  font-size: 0.88em;
+}
+.curiosity-dashboard .curiosity-discover-actions { margin-top: 12px; text-align: center; }
+.curiosity-dashboard .curiosity-discover-hint { font-size: 0.85em; opacity: 0.7; margin-bottom: 6px; }
+@container curiosity-dashboard (max-width: 640px) {
+  .curiosity-dashboard .curiosity-discover-grid { grid-template-columns: 1fr; }
+}

@@ -1,3 +1,4 @@
+import type { AudienceSignal, HotspotSourceResult } from './discovery';
 import type { Stage } from './stages';
 import type { WorkflowAction } from './workflow';
 
@@ -80,4 +81,6 @@ export interface DashboardModel {
   promptTemplatesPresent: boolean;
   promptTemplatesSkipped: string[];
   ideas: IdeaEntry[];
+  audienceSignals: AudienceSignal[];
+  hotspots: HotspotSourceResult[];
 }

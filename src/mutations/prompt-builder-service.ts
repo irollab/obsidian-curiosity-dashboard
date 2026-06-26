@@ -34,6 +34,7 @@ export function buildPrompt(
     date: formatDate(date),
     week: formatWeek(date),
     ideas: formatIdeas(options.ideas ?? []),
+    hotspots: '', audienceSignals: '', existingTitles: '',
   };
   return { label: action.label, text: fillPlaceholders(action.body, context), output: action.output };
 }

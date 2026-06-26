@@ -65,6 +65,11 @@ const TEMPLATES: SeedTemplate[] = [
     frontmatter: { id: 'weekly-review', label: '📅 周复盘', stage: 'general', order: 2, needs_focus: false, output: '00-入口/每日记录', description: '汇总一周知识库变化' },
     body: '请汇总本周知识库变化，范围：{{topic_dir}}、{{script_draft_dir}}、{{review_dir}}。\n输出：\n1. 本周新增选题\n2. 推荐下周优先做的 3 个选题\n3. 当前内容方向的风险\n4. 下一步行动清单\n生成到 00-入口/每日记录/本周复盘-{{date}}.md。',
   },
+  {
+    filename: '11-从热点+受众生成选题卡.md',
+    frontmatter: { id: 'spark-topics', label: '🔥 从热点+受众生成选题卡', stage: '选题', order: 3, needs_focus: false, output: '10-选题池/待评估', description: '热点×受众反馈拼成选题卡' },
+    body: '请把下面的热点和受众反馈，整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题用 {{topic_template}} 的结构；只做选题判断，不写完整脚本。\n要求：优先选「热点时机」与「受众真实问过的问题」有交集的角度；避免与「已有选题」重复。\n\n热点：\n{{hotspots}}\n\n受众反馈：\n{{audience_signals}}\n\n已有选题（不要重复）：\n{{existing_titles}}',
+  },
 ];
 
 export class PromptSeedService {

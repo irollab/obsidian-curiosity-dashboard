@@ -1,6 +1,14 @@
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('obsidian', () => ({
+  Notice: class {},
+  PluginSettingTab: class {},
+  Setting: class {},
+}));
+
 import { DashboardDataService } from '@/data/dashboard-data-service';
+import { DEFAULT_SETTINGS } from '@/settings';
 import type { DashboardSettings } from '@/settings';
-import { describe, expect, it } from 'vitest';
 
 import { FakeVaultGateway } from '../support/fake-vault-gateway';
 
@@ -23,6 +31,12 @@ const SETTINGS: DashboardSettings = {
   enableMobileView: true,
   language: 'auto',
   focusHistory: [],
+  rssSources: [],
+  commentDocPath: '20-素材库/受众问题.md',
+  hotspotArchiveDir: '30-竞品热点/热点观察',
+  hotspotCacheTtlHours: 6,
+  enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+  hotspotCache: {},
 };
 const NON_READY_FOCUS_CASES: Array<{
   kind: 'none' | 'multiple';
@@ -565,6 +579,19 @@ describe('DashboardDataService', () => {
     const model = await service(vault).load(false);
     expect(model.promptTemplatesPresent).toBe(false);
     expect(model.workflowActions).toEqual([]);
+  });
+
+  it('模型带 audienceSignals 与 hotspots（来自缓存）', async () => {
+    const gateway = new FakeVaultGateway();
+    gateway.files.set('10-选题池/待评估/灵感收集箱.md', '- 点子一');
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      hotspotCache: { 'hacker-news': { items: [{ title: 'HN A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }], fetchedAt: 1, status: 'ok' as const } },
+    };
+    const model = await new DashboardDataService(gateway, settings).load(false);
+    expect(model.audienceSignals.map((s) => s.text)).toContain('点子一');
+    const hn = model.hotspots.find((r) => r.sourceId === 'hacker-news');
+    expect(hn?.items[0]?.title).toBe('HN A');
   });
 });
 

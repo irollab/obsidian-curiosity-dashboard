@@ -29,4 +29,15 @@ describe('PromptSeedService', () => {
     expect(writtenSecond).toBe(0);
     expect(gateway.files.get(sample)).toBe('我自己改过的内容');
   });
+
+  it('包含发现模板 spark-topics（含三类占位符）', async () => {
+    const gateway = new FakeVaultGateway();
+    await new PromptSeedService(gateway).seed(DIR);
+    const spark = gateway.files.get(`${DIR}/11-从热点+受众生成选题卡.md`);
+    expect(spark).toBeDefined();
+    expect(spark).toContain('id: spark-topics');
+    expect(spark).toContain('{{hotspots}}');
+    expect(spark).toContain('{{audience_signals}}');
+    expect(spark).toContain('{{existing_titles}}');
+  });
 });

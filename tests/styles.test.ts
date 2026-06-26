@@ -191,6 +191,20 @@ describe('dashboard stylesheet contract', () => {
       .toContain('text-align: center');
   });
 
+  it('styles the discover deck toolbar, grid, rows, and empty/failed states', async () => {
+    const css = await stylesheet();
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-discover-toolbar'))
+      .toContain('display: flex');
+    expect(blockAfter(css, '.curiosity-dashboard .curiosity-discover-grid'))
+      .toContain('grid-template-columns: 1fr 1fr');
+    expect(css).toContain('.curiosity-dashboard .curiosity-discover-row');
+    expect(css).toContain('.curiosity-dashboard .curiosity-discover-source-failed');
+    expect(css).toContain('.curiosity-dashboard .curiosity-discover-empty');
+    const narrow = blockAfter(css, '@container curiosity-dashboard (max-width: 640px)');
+    expect(blockAfter(narrow, '.curiosity-dashboard .curiosity-discover-grid'))
+      .toContain('grid-template-columns: 1fr');
+  });
+
   it('applies the display font only to display selectors and keeps body/code stacks', async () => {
     const css = await stylesheet();
     for (const selector of [

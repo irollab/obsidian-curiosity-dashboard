@@ -29,6 +29,12 @@ const settings: DashboardSettings = {
   enableMobileView: true,
   language: 'auto',
   focusHistory: [],
+  rssSources: [],
+  commentDocPath: '20-素材库/受众问题.md',
+  hotspotArchiveDir: '30-竞品热点/热点观察',
+  hotspotCacheTtlHours: 6,
+  enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+  hotspotCache: {},
 };
 
 describe('published examples', () => {

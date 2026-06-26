@@ -1,10 +1,17 @@
-import { Notice, Plugin, type WorkspaceLeaf } from 'obsidian';
+import { Notice, Plugin, requestUrl, type WorkspaceLeaf } from 'obsidian';
 
 import { ObsidianVaultGateway } from '@/adapters/obsidian-vault-gateway';
+import { ObsidianHttpClient } from '@/adapters/obsidian-http-client';
 import { resolveLocale } from '@/i18n/locale';
 import type { TranslationKey } from '@/i18n/translations';
 import { createTranslator, type Translator } from '@/i18n/translator';
 import { DashboardDataService } from '@/data/dashboard-data-service';
+import { HotspotFetchService } from '@/data/hotspot-fetch-service';
+import { HackerNewsSource } from '@/data/hotspot-sources/hacker-news-source';
+import { GithubTrendingSource } from '@/data/hotspot-sources/github-trending-source';
+import { RssSource } from '@/data/hotspot-sources/rss-source';
+import { DomesticTrendingSource } from '@/data/hotspot-sources/domestic-trending-source';
+import type { HotspotSource } from '@/data/hotspot-sources/hotspot-source';
 import { PromptSeedService } from '@/mutations/prompt-seed-service';
 import { IdeaCaptureService } from '@/mutations/idea-capture-service';
 import { IdeaInboxService } from '@/mutations/idea-inbox-service';
@@ -116,6 +123,18 @@ export default class CuriosityDashboardPlugin extends Plugin {
     return new DashboardDataService(this.gateway, this.settings);
   }
 
+  hotspotFetchService(): HotspotFetchService {
+    const http = new ObsidianHttpClient((param) => requestUrl(param));
+    const enabled = new Set(this.settings.enabledHotspotSources);
+    const sources: HotspotSource[] = [];
+    if (enabled.has('hacker-news')) sources.push(new HackerNewsSource(http));
+    if (enabled.has('github-trending')) sources.push(new GithubTrendingSource(http));
+    if (enabled.has('rss')) sources.push(new RssSource('rss', '订阅 RSS', this.settings.rssSources, http));
+    if (enabled.has('official-rss')) sources.push(new RssSource('official-rss', '官方发布', OFFICIAL_FEEDS, http));
+    if (enabled.has('domestic-trending')) sources.push(new DomesticTrendingSource(http));
+    return new HotspotFetchService(sources, { timeoutMs: 8000 });
+  }
+
   recordFocusSwitch(path: string): void {
     // 记录最近切为焦点的选题（去重、最多 8 条），持久化到 data.json 并触发刷新。
     const entry = { path, switchedAt: Date.now() };
@@ -224,3 +243,8 @@ export default class CuriosityDashboardPlugin extends Plugin {
     new Notice(t('common.contextDetail', { context: t(context), detail }));
   }
 }
+
+const OFFICIAL_FEEDS = [
+  'https://www.anthropic.com/rss.xml',
+  'https://openai.com/blog/rss.xml',
+];

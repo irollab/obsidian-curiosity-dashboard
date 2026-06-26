@@ -4,7 +4,9 @@ import type { Frontmatter, VaultGateway } from '@/ports/vault-gateway';
 import type { DashboardSettings } from '@/settings';
 
 import { AssociationResolver } from './association-resolver';
+import { AudienceSignalRepository } from './audience-signal-repository';
 import { resolveFocus } from './focus-resolver';
+import { cacheToResults } from './hotspot-fetch-service';
 import { PromptTemplateRepository } from './prompt-template-repository';
 import { ideaInboxPath, parseIdeaInbox } from './idea-inbox';
 import { ReviewMetricsService } from './review-metrics-service';
@@ -79,6 +81,11 @@ export class DashboardDataService {
     const promptRepo = await PromptTemplateRepository.load(vault, settings.promptDir);
     const ideaPath = ideaInboxPath(settings.topicInboxDir);
     const ideas = vault.exists(ideaPath) ? parseIdeaInbox(await vault.read(ideaPath)) : [];
+    const audienceSignals = await new AudienceSignalRepository(vault, settings).collect();
+    const hotspots = cacheToResults(
+      settings.hotspotCache,
+      Object.entries(settings.hotspotCache).map(([id]) => ({ id, label: hotspotLabel(id) })),
+    );
 
     return {
       focus,
@@ -101,6 +108,8 @@ export class DashboardDataService {
       promptTemplatesPresent: promptRepo.present(),
       promptTemplatesSkipped: promptRepo.skipped(),
       ideas,
+      audienceSignals,
+      hotspots,
     };
   }
 }
@@ -362,4 +371,15 @@ function topicFromFocus(focus: FocusState): TopicRecord | null {
 
 function emptyAssociationCandidates(): DashboardModel['associationCandidates'] {
   return { scriptPath: [], assetPath: [], reviewPath: [] };
+}
+
+function hotspotLabel(id: string): string {
+  const labels: Record<string, string> = {
+    'hacker-news': 'Hacker News',
+    'github-trending': 'GitHub Trending',
+    rss: '订阅 RSS',
+    'official-rss': '官方发布',
+    'domestic-trending': '国内热榜',
+  };
+  return labels[id] ?? id;
 }

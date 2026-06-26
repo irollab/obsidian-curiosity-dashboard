@@ -1,3 +1,6 @@
+import { setIcon } from 'obsidian';
+
+import type { AudienceSignal, Hotspot } from '@/domain/discovery';
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { Stage } from '@/domain/stages';
 import type { WorkflowAction, WorkflowGroup } from '@/domain/workflow';
@@ -10,9 +13,10 @@ import { renderProductionQueue } from './renderers/production-queue';
 import { renderChannelPulse } from './renderers/channel-pulse';
 import { renderQuickActions } from './renderers/quick-actions';
 import { renderWorkflowDeck } from './renderers/workflow-deck';
+import { renderDiscoverDeck } from './renderers/discover-deck';
 import { renderDock } from './renderers/dock';
 
-export type DashboardTab = 'overview' | 'tasks' | 'workflow' | 'data';
+export type DashboardTab = 'overview' | 'tasks' | 'workflow' | 'discover' | 'data';
 export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
 
 export interface DashboardHandlers {
@@ -34,6 +38,10 @@ export interface DashboardHandlers {
   editIdea(line: number, text: string): Promise<void>;
   deleteIdea(line: number): Promise<void>;
   openWorkflowIdeas(): Promise<void>;
+  refreshHotspots(): Promise<void>;
+  archiveHotspots(): Promise<void>;
+  copyDiscoveryPrompt(hotspots: Hotspot[], signals: AudienceSignal[]): Promise<void>;
+  openHotspot(url: string): void;
 }
 
 export class DashboardRenderer {
@@ -44,6 +52,7 @@ export class DashboardRenderer {
     activeTab: DashboardTab,
     t: Translator,
     initialWorkflowGroup: WorkflowGroup | null = null,
+    hotspotsLoading = false,
   ): HTMLButtonElement {
     container.empty();
     container.addClass('curiosity-dashboard');
@@ -52,6 +61,7 @@ export class DashboardRenderer {
       { id: 'overview', label: t.t('tab.overview') },
       { id: 'tasks', label: t.t('tab.tasks') },
       { id: 'workflow', label: t.t('tab.workflow') },
+      { id: 'discover', label: t.t('tab.discover') },
       { id: 'data', label: t.t('tab.data') },
     ];
 
@@ -116,6 +126,8 @@ export class DashboardRenderer {
         renderQuickActions(panel, model, handlers, t);
       } else if (id === 'workflow') {
         renderWorkflowDeck(panel, model, handlers, t, initialWorkflowGroup);
+      } else if (id === 'discover') {
+        renderDiscoverDeck(panel, model, handlers, t, hotspotsLoading);
       } else if (id === 'tasks') {
         renderMissionControl(panel, model, handlers, t);
         renderThisWeek(panel, model, handlers.openPath, t);
@@ -125,11 +137,43 @@ export class DashboardRenderer {
     }
 
     renderDock(shell, model, handlers, t);
+    renderFooter(shell, t);
 
     const activeButton = buttons.find(({ id }) => id === activeTab)?.button;
     if (activeButton === undefined) throw new Error(`Unknown dashboard tab: ${activeTab}`);
     return activeButton;
   }
+}
+
+// 底部版权信息栏。
+function renderFooter(shell: HTMLElement, t: Translator): void {
+  const footer = shell.createEl('footer', { cls: 'curiosity-footer' });
+  footer.createSpan({ text: t.t('footer.poweredBy') });
+  footer.createSpan({ cls: 'curiosity-footer-sep', text: '·' });
+  footer.createSpan({ text: t.t('footer.copyright') });
+  footer.createSpan({ cls: 'curiosity-footer-sep', text: '·' });
+  const email = footer.createEl('a', {
+    cls: 'curiosity-footer-link curiosity-footer-email',
+    attr: { href: 'mailto:th@tancem.cn', target: '_blank', rel: 'noopener' },
+  });
+  const emailIcon = email.createSpan({ cls: 'curiosity-footer-link-icon', attr: { 'aria-hidden': 'true' } });
+  setIcon(emailIcon, 'mail');
+  email.createSpan({ text: t.t('footer.email') });
+  email.style.setProperty('text-decoration', 'none');
+
+  footer.createSpan({ cls: 'curiosity-footer-sep', text: '·' });
+  const repo = footer.createEl('a', {
+    cls: 'curiosity-footer-link curiosity-footer-github',
+    attr: {
+      href: 'https://github.com/irollab/obsidian-curiosity-dashboard',
+      target: '_blank',
+      rel: 'noopener',
+      'aria-label': t.t('footer.githubAria'),
+    },
+  });
+  const icon = repo.createSpan({ cls: 'curiosity-footer-link-icon', attr: { 'aria-hidden': 'true' } });
+  setIcon(icon, 'github');
+  repo.createSpan({ text: 'irollab' });
 }
 
 function tabTargetIndex(key: string, current: number, length: number): number | null {

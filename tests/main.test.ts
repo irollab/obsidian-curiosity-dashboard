@@ -63,6 +63,7 @@ vi.mock('obsidian', () => {
     TFile: class {},
     TFolder: class {},
     normalizePath: (path: string) => path,
+    requestUrl: async () => ({ status: 200, text: '' }),
     setIcon: vi.fn(),
   };
 });

@@ -2,7 +2,11 @@ import { type App, Notice, PluginSettingTab, Setting } from 'obsidian';
 
 import type { LanguageSetting } from '@/i18n/locale';
 
+import type { TranslationKey } from '@/i18n/translations';
+
 import type { FocusHistoryEntry } from '@/domain/models';
+
+import type { HotspotCache } from '@/data/hotspot-fetch-service';
 
 import type CuriosityDashboardPlugin from './main';
 
@@ -20,10 +24,16 @@ export interface DashboardSettings {
   backgroundPath: string;
   logoPath: string;
   openOnStartup: boolean;
-  defaultTab: 'overview' | 'tasks' | 'workflow' | 'data';
+  defaultTab: 'overview' | 'tasks' | 'workflow' | 'discover' | 'data';
   enableMobileView: boolean;
   language: LanguageSetting;
   focusHistory: FocusHistoryEntry[];
+  rssSources: string[];
+  commentDocPath: string;
+  hotspotArchiveDir: string;
+  hotspotCacheTtlHours: number;
+  enabledHotspotSources: string[];
+  hotspotCache: HotspotCache;
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -44,9 +54,15 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   enableMobileView: true,
   language: 'auto',
   focusHistory: [],
+  rssSources: [],
+  commentDocPath: '20-素材库/受众问题.md',
+  hotspotArchiveDir: '30-竞品热点/热点观察',
+  hotspotCacheTtlHours: 6,
+  enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+  hotspotCache: {},
 };
 
-const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'workflow', 'data']);
+const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'workflow', 'discover', 'data']);
 
 export function parseSettings(raw: unknown): DashboardSettings {
   const values = isRecord(raw) ? raw : {};
@@ -74,6 +90,15 @@ export function parseSettings(raw: unknown): DashboardSettings {
         : DEFAULT_SETTINGS.enableMobileView,
     language: isLanguageSetting(values.language) ? values.language : DEFAULT_SETTINGS.language,
     focusHistory: parseFocusHistory(values.focusHistory),
+    rssSources: parseStringArray(values.rssSources),
+    commentDocPath: nonEmptyStringOr(values.commentDocPath, DEFAULT_SETTINGS.commentDocPath),
+    hotspotArchiveDir: nonEmptyStringOr(values.hotspotArchiveDir, DEFAULT_SETTINGS.hotspotArchiveDir),
+    hotspotCacheTtlHours: parsePositiveInt(values.hotspotCacheTtlHours, DEFAULT_SETTINGS.hotspotCacheTtlHours),
+    enabledHotspotSources:
+      parseStringArray(values.enabledHotspotSources).length > 0
+        ? parseStringArray(values.enabledHotspotSources)
+        : [...DEFAULT_SETTINGS.enabledHotspotSources],
+    hotspotCache: parseHotspotCache(values.hotspotCache),
   };
 }
 
@@ -119,7 +144,18 @@ type TextSettingKey =
   | 'reviewTemplate'
   | 'promptDir'
   | 'backgroundPath'
-  | 'logoPath';
+  | 'logoPath'
+  | 'commentDocPath'
+  | 'hotspotArchiveDir';
+
+// 「发现」热点源的设置面板开关项（id 与各 HotspotSource.id 对齐）。
+const HOTSPOT_SOURCE_OPTIONS: ReadonlyArray<{ id: string; labelKey: TranslationKey }> = [
+  { id: 'hacker-news', labelKey: 'settings.source.hackerNews' },
+  { id: 'github-trending', labelKey: 'settings.source.githubTrending' },
+  { id: 'rss', labelKey: 'settings.source.rss' },
+  { id: 'official-rss', labelKey: 'settings.source.officialRss' },
+  { id: 'domestic-trending', labelKey: 'settings.source.domesticTrending' },
+];
 
 export class DashboardSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: CuriosityDashboardPlugin) {
@@ -138,8 +174,41 @@ export class DashboardSettingTab extends PluginSettingTab {
     this.addText(t('settings.scriptTemplate'), 'scriptTemplate');
     this.addText(t('settings.reviewTemplate'), 'reviewTemplate');
     this.addText(t('settings.promptDir'), 'promptDir');
+    this.addText(t('settings.commentDocPath'), 'commentDocPath');
+    this.addText(t('settings.hotspotArchiveDir'), 'hotspotArchiveDir');
     this.addText(t('settings.backgroundPath'), 'backgroundPath');
     this.addText(t('settings.logoPath'), 'logoPath');
+
+    new Setting(this.containerEl).setName(t('settings.rssSources')).addTextArea((area) =>
+      area
+        .setValue(this.plugin.settings.rssSources.join('\n'))
+        .onChange((value) => {
+          const list = value.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0);
+          this.updateSetting('rssSources', list);
+        }),
+    );
+
+    new Setting(this.containerEl).setName(t('settings.hotspotCacheTtlHours')).addText((text) =>
+      text.setValue(String(this.plugin.settings.hotspotCacheTtlHours)).onChange((value) => {
+        const hours = Number.parseInt(value.trim(), 10);
+        if (Number.isInteger(hours) && hours > 0) {
+          this.updateSetting('hotspotCacheTtlHours', hours);
+        }
+      }),
+    );
+
+    this.containerEl.createEl('h3', { text: t('settings.enabledHotspotSources') });
+    for (const { id, labelKey } of HOTSPOT_SOURCE_OPTIONS) {
+      new Setting(this.containerEl).setName(t(labelKey)).addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.enabledHotspotSources.includes(id)).onChange((on) => {
+          const current = this.plugin.settings.enabledHotspotSources;
+          const next = on
+            ? [...new Set([...current, id])]
+            : current.filter((value) => value !== id);
+          this.updateSetting('enabledHotspotSources', next);
+        }),
+      );
+    }
 
     new Setting(this.containerEl).setName(t('settings.openOnStartup')).addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.openOnStartup).onChange((value) => {
@@ -153,6 +222,7 @@ export class DashboardSettingTab extends PluginSettingTab {
           overview: t('tab.overview'),
           tasks: t('tab.tasks'),
           workflow: t('tab.workflow'),
+          discover: t('tab.discover'),
           data: t('tab.data'),
         })
         .setValue(this.plugin.settings.defaultTab)
@@ -205,4 +275,30 @@ export class DashboardSettingTab extends PluginSettingTab {
       new Notice(t('settings.saveFailed', { detail }));
     });
   }
+}
+
+function parseStringArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+}
+
+function parsePositiveInt(raw: unknown, fallback: number): number {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : fallback;
+}
+
+function parseHotspotCache(raw: unknown): HotspotCache {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const cache: HotspotCache = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== 'object' || value === null) continue;
+    const entry = value as Record<string, unknown>;
+    if (!Array.isArray(entry.items)) continue;
+    const status = entry.status;
+    cache[key] = {
+      items: entry.items as HotspotCache[string]['items'],
+      fetchedAt: typeof entry.fetchedAt === 'number' ? entry.fetchedAt : 0,
+      status: status === 'ok' || status === 'failed' || status === 'stale' ? status : 'stale',
+    };
+  }
+  return cache;
 }

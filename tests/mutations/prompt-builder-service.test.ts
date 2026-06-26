@@ -24,6 +24,7 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     focusCandidates: [], pickableTopics: [], tasks: [], thisWeek: [], queue: [],
     metrics: [], reviewPath: null, mobileReadOnly: false,
     workflowActions: [action], promptTemplatesPresent: true, promptTemplatesSkipped: [], ideas: [],
+    audienceSignals: [], hotspots: [],
     ...overrides,
   };
 }

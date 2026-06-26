@@ -2,9 +2,13 @@ import { ItemView, Notice, Platform, TFile, TFolder, type WorkspaceLeaf } from '
 
 import type { ChecklistTask, DashboardModel, TopicRecord } from '@/domain/models';
 import type { WorkflowAction } from '@/domain/workflow';
+import type { Hotspot, AudienceSignal, HotspotSourceResult } from '@/domain/discovery';
 import type { TranslationKey } from '@/i18n/translations';
 import type { Translator } from '@/i18n/translator';
 import { buildPrompt } from '@/mutations/prompt-builder-service';
+import { buildDiscoveryPrompt } from '@/mutations/discovery-prompt-builder';
+import { buildHotspotArchive, hotspotArchivePath } from '@/mutations/hotspot-archive-builder';
+import { resultsToCache } from '@/data/hotspot-fetch-service';
 import {
   sanitizeTitle,
   TemplateNotFoundError,
@@ -34,6 +38,8 @@ export class CuriosityDashboardView extends ItemView {
   private tabRevision = 0;
   private lastModel: DashboardModel | null = null;
   private pendingWorkflowGroup: WorkflowGroup | null = null;
+  private hotspotsLoading = false;
+  private hotspotsAutoChecked = false;
   private creationPromise: Promise<void> | null = null;
   private readonly refreshController: LatestRefresh<DashboardModel>;
   private readonly renderer = new DashboardRenderer();
@@ -132,10 +138,15 @@ export class CuriosityDashboardView extends ItemView {
       editIdea: (line, currentText) => this.editIdea(line, currentText),
       deleteIdea: (line) => this.deleteIdea(line),
       openWorkflowIdeas: () => this.openWorkflowIdeas(),
-    }, this.activeTab, this.t, this.pendingWorkflowGroup);
+      refreshHotspots: () => this.refreshHotspots(),
+      archiveHotspots: () => this.archiveHotspots(),
+      copyDiscoveryPrompt: (hotspots, signals) => this.copyDiscoveryPrompt(hotspots, signals),
+      openHotspot: (url) => this.openHotspot(url),
+    }, this.activeTab, this.t, this.pendingWorkflowGroup, this.hotspotsLoading);
     this.pendingWorkflowGroup = null;
     this.plugin.updateObservedDataPaths(observedReviewPaths(model));
     if (focusActiveTab) activeButton.focus();
+    if (this.activeTab === 'discover') this.maybeAutoRefreshHotspots(model);
   }
 
   private async openPath(path: string): Promise<void> {
@@ -383,6 +394,8 @@ export class CuriosityDashboardView extends ItemView {
     const revision = ++this.tabRevision;
     this.activeTab = tab;
     this.plugin.settings.defaultTab = tab;
+    // 每次切到「发现」tab 都允许重新做一次 TTL 过期自动刷新判断。
+    if (tab === 'discover') this.hotspotsAutoChecked = false;
     if (this.lastModel !== null) this.renderModel(this.lastModel, true);
     try {
       await this.plugin.saveSettings();
@@ -528,6 +541,100 @@ export class CuriosityDashboardView extends ItemView {
     }
   }
 
+  private async refreshHotspots(): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    if (this.hotspotsLoading) return;
+    this.hotspotsLoading = true;
+    // 立刻重渲染，让「刷新热点」按钮进入「抓取中…」禁用态。
+    if (this.lastModel !== null) this.renderModel(this.lastModel);
+    try {
+      const results = await this.plugin.hotspotFetchService().fetchAll(this.plugin.settings.hotspotCache);
+      this.plugin.settings.hotspotCache = resultsToCache(results);
+      await this.plugin.saveSettings();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : this.t.t('common.unknownError');
+      new Notice(this.t.t('discover.fetchFailed', { detail }));
+    } finally {
+      this.hotspotsLoading = false;
+      await this.refresh();
+    }
+  }
+
+  // 进入「发现」tab 后，若热点缓存比 TTL 旧（或从未抓取）则自动刷新一次。
+  // 每次进入只判断一次（hotspotsAutoChecked），避免渲染副作用导致循环抓取。
+  private maybeAutoRefreshHotspots(model: DashboardModel): void {
+    if (this.hotspotsAutoChecked) return;
+    this.hotspotsAutoChecked = true;
+    if (this.hotspotsLoading) return;
+    if (Platform.isMobile || model.mobileReadOnly) return;
+    if (!hotspotCacheStale(model.hotspots, this.plugin.settings.hotspotCacheTtlHours)) return;
+    // 延后到当前渲染结束后再触发，避免在 renderModel 内部重入渲染。
+    setTimeout(() => void this.refreshHotspots(), 0);
+  }
+
+  // 在系统浏览器打开热点原文链接。
+  private openHotspot(url: string): void {
+    if (url.trim().length === 0) return;
+    window.open(url, '_blank');
+  }
+
+  private async archiveHotspots(): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    const results = this.lastModel?.hotspots ?? [];
+    if (results.every((r) => r.items.length === 0)) {
+      new Notice(this.t.t('discover.archiveEmpty'));
+      return;
+    }
+    const date = formatToday();
+    const path = hotspotArchivePath(
+      this.plugin.settings.hotspotArchiveDir, date,
+      (candidate) => this.plugin.gateway.exists(candidate),
+    );
+    try {
+      const dir = this.plugin.settings.hotspotArchiveDir;
+      if (this.app.vault.getAbstractFileByPath(dir) === null) {
+        await this.app.vault.createFolder(dir);
+      }
+      await this.plugin.gateway.create(path, buildHotspotArchive({ date, results }));
+      new Notice(this.t.t('discover.archived', { path }));
+      await this.openPath(path);
+    } catch (error) {
+      this.showActionError('view.createFailed', error);
+    }
+  }
+
+  private async copyDiscoveryPrompt(hotspots: Hotspot[], signals: AudienceSignal[]): Promise<void> {
+    if (this.lastModel === null) {
+      new Notice(this.t.t('view.notLoadedCreate'));
+      return;
+    }
+    const action = this.lastModel.workflowActions.find((a) => a.id === 'spark-topics');
+    if (action === undefined) {
+      new Notice(this.t.t('discover.noTemplate'));
+      return;
+    }
+    const result = buildDiscoveryPrompt({
+      action, hotspots, signals,
+      existingTitles: existingTopicTitles(this.lastModel),
+      settings: this.plugin.settings,
+    });
+    try {
+      await navigator.clipboard.writeText(result.text);
+      new Notice(this.t.t('discover.copied', {
+        label: result.label, output: result.output ?? this.t.t('workflow.readonlyOutput'),
+      }));
+    } catch {
+      const tempPath = `${this.plugin.settings.promptDir}/_临时-${Date.now()}.md`;
+      try {
+        await this.plugin.gateway.create(tempPath, result.text);
+        await this.app.workspace.openLinkText(tempPath, '', false);
+        new Notice(this.t.t('workflow.copyFailed', { path: tempPath }));
+      } catch (error) {
+        this.showActionError('view.createFailed', error);
+      }
+    }
+  }
+
   private async openOutput(path: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) {
@@ -655,4 +762,27 @@ function observedReviewPaths(model: DashboardModel): string[] {
 function joinVaultPath(directory: string, filename: string): string {
   const normalizedDirectory = directory.replaceAll('\\', '/').replace(/\/+$/, '');
   return normalizedDirectory.length === 0 ? filename : `${normalizedDirectory}/${filename}`;
+}
+
+function formatToday(): string {
+  const d = new Date();
+  const y = String(d.getFullYear()).padStart(4, '0');
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function existingTopicTitles(model: DashboardModel): string[] {
+  const titles = new Set<string>();
+  for (const topic of [...model.thisWeek, ...model.queue, ...model.pickableTopics]) {
+    if (topic.title.trim().length > 0) titles.add(topic.title.trim());
+  }
+  return [...titles];
+}
+
+// 热点缓存是否已过期：从未抓取（最新时间戳为 0）或距今超过 TTL 小时。
+function hotspotCacheStale(results: HotspotSourceResult[], ttlHours: number): boolean {
+  const newest = results.reduce((max, result) => Math.max(max, result.fetchedAt), 0);
+  if (newest === 0) return true;
+  return Date.now() - newest > ttlHours * 3_600_000;
 }

@@ -53,6 +53,8 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     promptTemplatesPresent: false,
     promptTemplatesSkipped: [],
     ideas: [],
+    audienceSignals: [],
+    hotspots: [],
     ...overrides,
   };
 }
@@ -77,6 +79,10 @@ function handlers(): DashboardHandlers {
     switchFocus: vi.fn(async () => undefined),
     openWorkPicker: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
+    refreshHotspots: vi.fn(async () => undefined),
+    archiveHotspots: vi.fn(async () => undefined),
+    copyDiscoveryPrompt: vi.fn(async () => undefined),
+    openHotspot: vi.fn(),
   };
 }
 
@@ -252,6 +258,35 @@ describe('dashboard secondary modules', () => {
     expect(findByText(pulse, '另有 2 条评论')).toBeDefined();
   });
 
+  it('渠道脉搏：平台标签彩色、播放量最高值放大突出', () => {
+    const { root } = render(model({
+      metrics: [
+        {
+          collectedAt: '2026-06-22 10:00', comments: '7', favorites: null,
+          likes: '88', platform: 'B站', shares: null, views: '1200',
+        },
+        {
+          collectedAt: null, comments: null, favorites: null,
+          likes: '5', platform: '抖音', shares: null, views: '8.5万',
+        },
+      ],
+      reviewPath: '60-发布复盘/39-review.md',
+    }), 'data');
+    const pulse = section(root, '渠道脉搏');
+
+    // 平台渲染为彩色标签 span
+    const platforms = findAll(pulse, (element) => element.classList.has('curiosity-pulse-platform'));
+    expect(platforms.map((element) => element.textContent)).toEqual(['B站', '抖音']);
+    expect(platforms[0]?.style.getPropertyValue('background')).not.toBe('');
+
+    // 每个指标列的最高值各自放大突出（播放/点赞/评论 各 1 个）
+    const topCells = findAll(pulse, (element) =>
+      element.classList.has('curiosity-pulse-top'));
+    expect(topCells).toHaveLength(3);
+    expect(topCells.some((cell) => cell.textContent.includes('8.5万'))).toBe(true);
+    expect(topCells.some((cell) => cell.textContent.includes('88'))).toBe(true);
+  });
+
   it('keeps the local review entry and explicit comment state when metrics are absent', () => {
     const { root } = render(model({ reviewPath: '60-发布复盘/39-review.md' }), 'data');
 
@@ -370,7 +405,8 @@ describe('dashboard secondary modules', () => {
     const labels = ['灵感', '作品', '任务', '脚本', '数据', '复盘', '设置'];
 
     expect(findAll(dock, (element) => element.getAttr('data-icon') !== null)).toHaveLength(7);
-    expect(vi.mocked(setIcon)).toHaveBeenCalledTimes(7);
+    // dock 7 个图标 + 底部 footer 邮箱/GitHub 2 个图标 = 9 次
+    expect(vi.mocked(setIcon)).toHaveBeenCalledTimes(9);
     for (const label of labels) {
       const button = findByText(dock, label)?.parent;
       expect(button?.tag).toBe('button');
@@ -418,6 +454,20 @@ describe('dashboard secondary modules', () => {
     const buttons = secondary.flatMap((area) => findAll(area, (element) => element.tag === 'button'));
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every((button) => button.type === 'button')).toBe(true);
+  });
+
+  it('底部渲染版权信息：Powered by / ©2026 / 邮箱链接 / GitHub 仓库', () => {
+    const { root } = render(model());
+    const footer = findAll(root, (element) => element.classList.has('curiosity-footer'))[0];
+    expect(footer).toBeDefined();
+    expect(footer?.textContent).toContain('iRollab');
+    expect(footer?.textContent).toContain('2026');
+    expect(footer?.textContent).toContain('th@tancem.cn');
+    const email = findAll(footer!, (element) => element.classList.has('curiosity-footer-email'))[0];
+    expect(email?.getAttr('href')).toBe('mailto:th@tancem.cn');
+    const repo = findAll(footer!, (element) => element.classList.has('curiosity-footer-github'))[0];
+    expect(repo?.getAttr('href')).toBe('https://github.com/irollab/obsidian-curiosity-dashboard');
+    expect(repo?.textContent).toContain('irollab');
   });
 });
 
@@ -514,6 +564,227 @@ describe('workflow deck tab', () => {
       handlers(), 'workflow' as DashboardTab, createTranslator('zh'),
     );
     expect(findByText(root, '生成默认提示词模板')).not.toBeNull();
+  });
+});
+
+describe('discover deck tab', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('有热点时渲染条目与生成按钮', () => {
+    const root = new FakeElement();
+    let copied = false;
+    const actions = {
+      ...handlers(),
+      copyDiscoveryPrompt: vi.fn(async () => {
+        copied = true;
+      }),
+    };
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [
+          {
+            sourceId: 'hn', label: 'Hacker News', status: 'ok', fetchedAt: 1, error: null,
+            items: [
+              { title: 'HN A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null },
+            ],
+          },
+        ],
+        audienceSignals: [{ text: '怎么用', kind: '问题', source: '评论档', weight: 1 }],
+      }),
+      actions, 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(findByText(root, 'HN A')).not.toBeNull();
+    expect(findByText(root, '怎么用')).not.toBeNull();
+    const copy = findAll(root, (element) => element.classList.has('curiosity-discover-copy'))[0];
+    expect(copy).not.toBeUndefined();
+    copy?.click();
+    expect(copied).toBe(true);
+  });
+
+  it('无热点时渲染空态与刷新按钮', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ hotspots: [], audienceSignals: [] }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(root.textContent).toContain('还没有热点');
+    expect(findByText(root, '刷新热点')).not.toBeNull();
+  });
+
+  it('失败源显示告警', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [
+          { sourceId: 'weibo', label: '微博热榜', status: 'failed', fetchedAt: 1, error: 'x', items: [] },
+        ],
+      }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(root.textContent).toContain('抓取失败');
+  });
+
+  it('hotspotsLoading=true 时刷新按钮禁用并显示「抓取中…」', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ hotspots: [], audienceSignals: [] }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'), null, true,
+    );
+
+    const refresh = findAll(root, (element) => element.classList.has('curiosity-discover-refresh'))[0];
+    expect(refresh).not.toBeUndefined();
+    expect((refresh as unknown as { disabled: boolean }).disabled).toBe(true);
+    expect(refresh?.textContent).toContain('抓取中');
+  });
+
+  it('有抓取时间时显示「数据时间」', () => {
+    const root = new FakeElement();
+    const fetchedAt = new Date(2026, 5, 26, 14, 30).getTime();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [
+          {
+            sourceId: 'hn', label: 'Hacker News', status: 'ok', fetchedAt, error: null,
+            items: [{ title: 'HN A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }],
+          },
+        ],
+      }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(root.textContent).toContain('数据时间');
+    expect(root.textContent).toContain('06-26 14:30');
+  });
+
+  it('热点超过每页条数时分页，下一页显示剩余条目', () => {
+    const root = new FakeElement();
+    const items = Array.from({ length: 23 }, (_, i) => ({
+      title: `H${i}`, url: `https://h/${i}`, source: 'Hacker News', publishedAt: null, summary: null,
+    }));
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [{ sourceId: 'hn', label: 'Hacker News', status: 'ok', fetchedAt: 1, error: null, items }],
+      }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    const col = findAll(root, (element) => element.classList.has('curiosity-discover-hotspots'))[0]!;
+    expect(findAll(col, (e) => e.classList.has('curiosity-discover-row'))).toHaveLength(10);
+    expect(col.textContent).toContain('第 1/3 页 · 共 23 条');
+
+    const next = findAll(col, (e) => e.classList.has('curiosity-discover-page-btn'))
+      .find((button) => button.textContent === '下一页');
+    expect(next).toBeDefined();
+    next?.click();
+
+    expect(findAll(col, (e) => e.classList.has('curiosity-discover-row'))).toHaveLength(10);
+    expect(col.textContent).toContain('H10');
+    expect(col.textContent).toContain('第 2/3 页');
+  });
+
+  it('点击热点标题调用 openHotspot 打开原文', () => {
+    const root = new FakeElement();
+    const open = vi.fn();
+    const actions = { ...handlers(), openHotspot: open };
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [
+          {
+            sourceId: 'hn', label: 'Hacker News', status: 'ok', fetchedAt: 1, error: null,
+            items: [{ title: 'HN A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }],
+          },
+        ],
+      }),
+      actions, 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    const link = findAll(root, (element) => element.classList.has('curiosity-discover-link'))[0];
+    expect(link).toBeDefined();
+    link?.click();
+    expect(open).toHaveBeenCalledWith('https://a');
+  });
+
+  it('缺少发现模板时显示生成按钮并触发 seedPromptTemplates', () => {
+    const root = new FakeElement();
+    const seed = vi.fn(async () => undefined);
+    const actions = { ...handlers(), seedPromptTemplates: seed };
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ workflowActions: [] }),
+      actions, 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(findAll(root, (e) => e.classList.has('curiosity-discover-template-missing'))).toHaveLength(1);
+    const btn = findAll(root, (e) => e.classList.has('curiosity-discover-seed'))[0];
+    expect(btn).toBeDefined();
+    btn?.click();
+    expect(seed).toHaveBeenCalled();
+  });
+
+  it('已有发现模板时不显示生成横幅', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        workflowActions: [{
+          id: 'spark-topics', label: '从热点+受众生成选题卡', description: '', group: 'general',
+          order: 1, needsFocus: false, output: null, body: '', sourcePath: 'p/11.md',
+        }],
+      }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(findAll(root, (e) => e.classList.has('curiosity-discover-template-missing'))).toHaveLength(0);
+  });
+
+  it('分类过滤 chip：单击单独聚焦某来源，再点恢复全部', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({
+        hotspots: [{
+          sourceId: 'mix', label: 'Mix', status: 'ok', fetchedAt: 1, error: null,
+          items: [
+            { title: 'HN1', url: 'https://hn1', source: 'Hacker News', publishedAt: null, summary: null },
+            { title: 'GH1', url: 'https://gh1', source: 'GitHub Trending', publishedAt: null, summary: null },
+          ],
+        }],
+      }),
+      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
+    );
+
+    const col = findAll(root, (e) => e.classList.has('curiosity-discover-hotspots'))[0]!;
+    // 「全部」+ Hacker News + GitHub Trending = 3 个 chip
+    const chips = findAll(col, (e) => e.classList.has('curiosity-discover-filter-chip'));
+    expect(chips).toHaveLength(3);
+    expect(findAll(col, (e) => e.classList.has('curiosity-discover-row'))).toHaveLength(2);
+
+    // 点 GitHub Trending → 单独聚焦它，只剩 GH1（无需逐个关其他来源）
+    chips.find((c) => c.textContent === 'GitHub Trending')!.click();
+    let rows = findAll(col, (e) => e.classList.has('curiosity-discover-row'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain('GH1');
+
+    // 再点 GitHub Trending → 取消聚焦，恢复全部
+    chips.find((c) => c.textContent === 'GitHub Trending')!.click();
+    rows = findAll(col, (e) => e.classList.has('curiosity-discover-row'));
+    expect(rows).toHaveLength(2);
+
+    // 点 GitHub 聚焦后，点「全部」chip 也能恢复
+    chips.find((c) => c.textContent === 'GitHub Trending')!.click();
+    chips.find((c) => c.textContent === '全部')!.click();
+    rows = findAll(col, (e) => e.classList.has('curiosity-discover-row'));
+    expect(rows).toHaveLength(2);
   });
 });
 

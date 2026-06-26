@@ -24,6 +24,12 @@ const settings = {
   enableMobileView: true,
   language: 'auto' as const,
   focusHistory: [],
+  rssSources: [],
+  commentDocPath: '20-素材库/受众问题.md',
+  hotspotArchiveDir: '30-竞品热点/热点观察',
+  hotspotCacheTtlHours: 6,
+  enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+  hotspotCache: {},
 };
 
 function relevant(change: VaultChange, observed: Iterable<string> = []): boolean {

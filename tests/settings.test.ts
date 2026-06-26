@@ -10,7 +10,7 @@ import { DashboardSettingTab, DEFAULT_SETTINGS, parseSettings } from '../src/set
 type ChangeHandler = (value: string | boolean) => unknown;
 
 interface SettingRecord {
-  kind: 'dropdown' | 'text' | 'toggle';
+  kind: 'dropdown' | 'text' | 'textarea' | 'toggle';
   name: string;
   onChange: ChangeHandler;
   options?: Record<string, string>;
@@ -58,6 +58,11 @@ vi.mock('obsidian', () => {
 
     addDropdown(configure: (component: unknown) => void): this {
       this.addComponent('dropdown', configure);
+      return this;
+    }
+
+    addTextArea(configure: (component: unknown) => void): this {
+      this.addComponent('textarea', configure);
       return this;
     }
 
@@ -128,6 +133,12 @@ describe('dashboard settings', () => {
       enableMobileView: true,
       language: 'auto',
       focusHistory: [],
+      rssSources: [],
+      commentDocPath: '20-素材库/受众问题.md',
+      hotspotArchiveDir: '30-竞品热点/热点观察',
+      hotspotCacheTtlHours: 6,
+      enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+      hotspotCache: {},
     });
   });
 
@@ -150,6 +161,12 @@ describe('dashboard settings', () => {
       enableMobileView: false,
       language: 'en',
       focusHistory: [],
+      rssSources: [],
+      commentDocPath: '20-素材库/受众问题.md',
+      hotspotArchiveDir: '30-竞品热点/热点观察',
+      hotspotCacheTtlHours: 6,
+      enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss'],
+      hotspotCache: {},
     } as const;
 
     expect(parseSettings(settings)).toEqual(settings);
@@ -235,7 +252,7 @@ describe('dashboard settings', () => {
   it('displays every setting with current values', () => {
     makeTab();
 
-    expect(obsidianMock.headings).toEqual(['Curiosity Dashboard']);
+    expect(obsidianMock.headings).toEqual(['Curiosity Dashboard', 'Enabled hotspot sources']);
     expect(obsidianMock.settings.map(({ kind, name, value }) => ({ kind, name, value }))).toEqual([
       { kind: 'text', name: 'Topic directory', value: '10-选题池' },
       { kind: 'text', name: 'Script directory', value: '40-脚本大纲' },
@@ -245,31 +262,51 @@ describe('dashboard settings', () => {
       { kind: 'text', name: 'Script template', value: '99-模板/脚本大纲模板.md' },
       { kind: 'text', name: 'Review template', value: '99-模板/发布复盘模板.md' },
       { kind: 'text', name: 'Prompt template folder', value: '99-模板/codex-提示词' },
+      { kind: 'text', name: 'Comment doc path', value: '20-素材库/受众问题.md' },
+      { kind: 'text', name: 'Hotspot archive dir', value: '30-竞品热点/热点观察' },
       { kind: 'text', name: 'Background image', value: 'assets/default-background.png' },
       { kind: 'text', name: 'Logo image', value: 'assets/IROLLAB_light.svg' },
+      { kind: 'textarea', name: 'RSS feeds (one per line)', value: '' },
+      { kind: 'text', name: 'Hotspot cache TTL (hours)', value: '6' },
+      { kind: 'toggle', name: 'Hacker News', value: true },
+      { kind: 'toggle', name: 'GitHub Trending', value: true },
+      { kind: 'toggle', name: 'Subscribed RSS', value: true },
+      { kind: 'toggle', name: 'Official releases', value: true },
+      { kind: 'toggle', name: 'Domestic trending (3rd-party, off by default)', value: false },
       { kind: 'toggle', name: 'Open on startup', value: false },
       { kind: 'dropdown', name: 'Default tab', value: 'overview' },
       { kind: 'toggle', name: 'Enable simplified mobile view', value: true },
       { kind: 'dropdown', name: 'Language', value: 'auto' },
     ]);
-    expect(obsidianMock.settings[11]?.options).toEqual({
-      overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', data: 'Data',
+    expect(obsidianMock.settings[20]?.options).toEqual({
+      overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', discover: 'Discover', data: 'Data',
     });
-    expect(obsidianMock.settings[13]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
+    expect(obsidianMock.settings[22]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
   });
 
   it('persists every setting change', async () => {
     const { plugin } = makeTab();
 
-    for (const setting of obsidianMock.settings.slice(0, 10)) {
+    for (const setting of obsidianMock.settings.slice(0, 8)) {
       expect(setting.onChange('  changed  ')).toBeUndefined();
     }
-    expect(obsidianMock.settings[10]?.onChange(true)).toBeUndefined();
-    expect(obsidianMock.settings[11]?.onChange('data')).toBeUndefined();
-    expect(obsidianMock.settings[12]?.onChange(false)).toBeUndefined();
-    expect(obsidianMock.settings[13]?.onChange('zh')).toBeUndefined();
+    expect(obsidianMock.settings[8]?.onChange('changed')).toBeUndefined();
+    expect(obsidianMock.settings[9]?.onChange('changed')).toBeUndefined();
+    expect(obsidianMock.settings[10]?.onChange('changed')).toBeUndefined();
+    expect(obsidianMock.settings[11]?.onChange('changed')).toBeUndefined();
+    expect(obsidianMock.settings[12]?.onChange('https://a\nhttps://b')).toBeUndefined();
+    expect(obsidianMock.settings[13]?.onChange('12')).toBeUndefined();
+    expect(obsidianMock.settings[14]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[15]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[16]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[17]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[18]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[19]?.onChange(true)).toBeUndefined();
+    expect(obsidianMock.settings[20]?.onChange('data')).toBeUndefined();
+    expect(obsidianMock.settings[21]?.onChange(false)).toBeUndefined();
+    expect(obsidianMock.settings[22]?.onChange('zh')).toBeUndefined();
 
-    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(14));
+    await vi.waitFor(() => expect(plugin.saveSettings).toHaveBeenCalledTimes(23));
 
     expect(plugin.settings).toEqual({
       topicDir: 'changed',
@@ -282,6 +319,8 @@ describe('dashboard settings', () => {
       scriptTemplate: 'changed',
       reviewTemplate: 'changed',
       promptDir: 'changed',
+      commentDocPath: 'changed',
+      hotspotArchiveDir: 'changed',
       backgroundPath: 'changed',
       logoPath: 'changed',
       openOnStartup: true,
@@ -289,8 +328,12 @@ describe('dashboard settings', () => {
       enableMobileView: false,
       language: 'zh',
       focusHistory: [],
+      rssSources: ['https://a', 'https://b'],
+      hotspotCacheTtlHours: 12,
+      enabledHotspotSources: ['hacker-news', 'github-trending', 'rss', 'official-rss', 'domestic-trending'],
+      hotspotCache: {},
     });
-    expect(plugin.saveSettings).toHaveBeenCalledTimes(14);
+    expect(plugin.saveSettings).toHaveBeenCalledTimes(23);
   });
 
   it('contains save failures at every onChange boundary and shows a notice', async () => {
@@ -302,12 +345,40 @@ describe('dashboard settings', () => {
         ? true
         : setting.kind === 'dropdown'
           ? (setting.name === 'Language' ? 'zh' : 'data')
-          : 'changed';
+          : setting.kind === 'textarea'
+            ? 'https://a\nhttps://b'
+            : 'changed';
       const result = setting.onChange(value);
       expect(result).toBeUndefined();
     }
 
-    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(14));
+    // 23 个控件中，TTL 文本框收到非数字 'changed' 不会触发保存，故只有 22 条失败通知。
+    await vi.waitFor(() => expect(obsidianMock.notices).toHaveLength(22));
     expect(obsidianMock.notices.every((message) => message.includes('disk full'))).toBe(true);
+  });
+});
+
+describe('发现 tab 设置', () => {
+  it('默认值：rssSources=[]、commentDocPath、ttl=6、enabledHotspotSources 不含国内热榜、hotspotCache={}', () => {
+    expect(DEFAULT_SETTINGS.rssSources).toEqual([]);
+    expect(DEFAULT_SETTINGS.commentDocPath).toBe('20-素材库/受众问题.md');
+    expect(DEFAULT_SETTINGS.hotspotCacheTtlHours).toBe(6);
+    expect(DEFAULT_SETTINGS.hotspotArchiveDir).toBe('30-竞品热点/热点观察');
+    expect(DEFAULT_SETTINGS.enabledHotspotSources).toEqual(['hacker-news', 'github-trending', 'rss', 'official-rss']);
+    expect(DEFAULT_SETTINGS.hotspotCache).toEqual({});
+  });
+
+  it('discover 是合法 defaultTab', () => {
+    expect(parseSettings({ defaultTab: 'discover' }).defaultTab).toBe('discover');
+  });
+
+  it('坏 rssSources/ttl 被纠正', () => {
+    const s = parseSettings({ rssSources: ['https://a', 123, ''], hotspotCacheTtlHours: -3 });
+    expect(s.rssSources).toEqual(['https://a']);
+    expect(s.hotspotCacheTtlHours).toBe(6);
+  });
+
+  it('hotspotCache 非法结构归零为空对象', () => {
+    expect(parseSettings({ hotspotCache: 'bad' }).hotspotCache).toEqual({});
   });
 });

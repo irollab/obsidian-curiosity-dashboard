@@ -4,6 +4,7 @@ import type { WorkspaceLeaf } from 'obsidian';
 
 import type { DashboardModel } from '@/domain/models';
 import type { WorkflowAction } from '@/domain/workflow';
+import type { Hotspot, AudienceSignal } from '@/domain/discovery';
 import { createTranslator } from '@/i18n/translator';
 import { CuriosityDashboardView } from '@/curiosity-dashboard-view';
 import { TemplateNotFoundError } from '@/mutations/template-creation-service';
@@ -209,9 +210,15 @@ const model: DashboardModel = {
   promptTemplatesPresent: false,
   promptTemplatesSkipped: [],
   ideas: [],
+  audienceSignals: [],
+  hotspots: [],
 };
 
-function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = true) {
+function makeHarness(
+  load: () => Promise<DashboardModel>,
+  enableMobileView = true,
+  defaultTab: 'overview' | 'tasks' | 'workflow' | 'discover' | 'data' = 'tasks',
+) {
   const mutation = {
     advanceStage: vi.fn(async () => '发布' as const),
     setAssociationPath: vi.fn(async () => undefined),
@@ -225,6 +232,7 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
   const setting = { open: vi.fn(), openTabById: vi.fn() };
   const gateway = {
     create: vi.fn<(path: string, content: string) => Promise<void>>(async () => undefined),
+    exists: vi.fn<(path: string) => boolean>(() => false),
   };
   const promptSeed = { seed: vi.fn<(dir: string) => Promise<number>>(async () => 10) };
   const ideaCapture = {
@@ -238,16 +246,20 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     createFolder: vi.fn<(path: string) => Promise<void>>(async () => undefined),
     getAbstractFileByPath: vi.fn<(path: string) => object | null>(() => null),
   };
+  const hotspotFetch = {
+    fetchAll: vi.fn<(cache: unknown) => Promise<unknown[]>>(async () => []),
+  };
   const plugin = {
     dataService: () => ({ load }),
     gateway,
+    hotspotFetchService: () => hotspotFetch,
     manifest: { id: 'curiosity-dashboard' },
     mutationService: () => mutation,
     promptSeedService: () => promptSeed,
     ideaCaptureService: () => ideaCapture,
     ideaInboxService: () => ideaInbox,
     saveSettings,
-    settings: { ...DEFAULT_SETTINGS, defaultTab: 'tasks' as const, enableMobileView },
+    settings: { ...DEFAULT_SETTINGS, defaultTab, enableMobileView },
     templateService: () => ({ create: templateCreate }),
     translator: () => createTranslator('zh'),
     updateObservedDataPaths: vi.fn(),
@@ -256,7 +268,10 @@ function makeHarness(load: () => Promise<DashboardModel>, enableMobileView = tru
     { app: { setting, vault, workspace: { openLinkText } } } as unknown as WorkspaceLeaf,
     plugin as never,
   ) as CuriosityDashboardView & { contentEl: InstanceType<typeof obsidianMock.FakeElement> };
-  return { gateway, openLinkText, mutation, promptSeed, plugin, saveSettings, setting, templateCreate, vault, view };
+  return {
+    gateway, hotspotFetch, openLinkText, mutation, promptSeed, plugin, saveSettings, setting, templateCreate, vault,
+    view,
+  };
 }
 
 function makeView(load: () => Promise<DashboardModel>, enableMobileView = true) {
@@ -1210,7 +1225,155 @@ describe('CuriosityDashboardView', () => {
       expect(harness.promptSeed.seed).not.toHaveBeenCalled();
     });
   });
+
+  describe('discover deck handlers', () => {
+    function discoverActionsOf(view: CuriosityDashboardView) {
+      return view as unknown as {
+        refreshHotspots(): Promise<void>;
+        archiveHotspots(): Promise<void>;
+        copyDiscoveryPrompt(hotspots: unknown[], signals: unknown[]): Promise<void>;
+      };
+    }
+
+    it('refreshHotspots 抓取后写入缓存并刷新', async () => {
+      const harness = makeHarness(async () => model);
+      await harness.view.refresh();
+      const previousCache = harness.plugin.settings.hotspotCache;
+      harness.hotspotFetch.fetchAll.mockResolvedValueOnce([
+        {
+          sourceId: 'hacker-news', label: 'Hacker News', status: 'ok', fetchedAt: 123,
+          items: [{ title: 'A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }],
+          error: null,
+        },
+      ]);
+
+      await discoverActionsOf(harness.view).refreshHotspots();
+
+      expect(harness.hotspotFetch.fetchAll).toHaveBeenCalledWith(previousCache);
+      expect(harness.plugin.settings.hotspotCache['hacker-news']).toEqual({
+        items: [{ title: 'A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }],
+        fetchedAt: 123,
+        status: 'ok',
+      });
+      expect(harness.saveSettings).toHaveBeenCalledOnce();
+    });
+
+    it('refreshHotspots 抓取失败时报错而不写入缓存', async () => {
+      const harness = makeHarness(async () => model);
+      await harness.view.refresh();
+      harness.hotspotFetch.fetchAll.mockRejectedValueOnce(new Error('network down'));
+
+      await discoverActionsOf(harness.view).refreshHotspots();
+
+      expect(harness.saveSettings).not.toHaveBeenCalled();
+      expect(obsidianMock.notices.some((notice) => notice.includes('network down'))).toBe(true);
+    });
+
+    it('打开「发现」tab 且热点缓存为空时自动抓取一次', async () => {
+      const harness = makeHarness(async () => ({ ...model, hotspots: [] }), true, 'discover');
+      await harness.view.refresh();
+      // 等待 maybeAutoRefreshHotspots 的 setTimeout(0) 触发
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(harness.hotspotFetch.fetchAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('打开「发现」tab 但缓存未过期时不自动抓取', async () => {
+      const fresh = {
+        ...model,
+        hotspots: [
+          {
+            sourceId: 'hacker-news', label: 'Hacker News', status: 'ok' as const, fetchedAt: Date.now(),
+            items: [{ title: 'A', url: 'https://a', source: 'Hacker News', publishedAt: null, summary: null }],
+            error: null,
+          },
+        ],
+      };
+      const harness = makeHarness(async () => fresh, true, 'discover');
+      await harness.view.refresh();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(harness.hotspotFetch.fetchAll).not.toHaveBeenCalled();
+    });
+
+    it('archiveHotspots 在没有热点时提示而不写文件', async () => {
+      const harness = makeHarness(async () => ({ ...model, hotspots: [] }));
+      await harness.view.refresh();
+
+      await discoverActionsOf(harness.view).archiveHotspots();
+
+      expect(harness.gateway.create).not.toHaveBeenCalled();
+      expect(obsidianMock.notices).toContain('没有可归档的热点');
+    });
+
+    it('archiveHotspots 写入归档文件并打开', async () => {
+      const value: DashboardModel = {
+        ...model,
+        hotspots: [
+          {
+            sourceId: 'hacker-news', label: 'Hacker News', status: 'ok', fetchedAt: 1,
+            items: [{ title: 'A', url: 'https://a', source: 'Hacker News', publishedAt: '2026-06-26', summary: null }],
+            error: null,
+          },
+        ],
+      };
+      const harness = makeHarness(async () => value);
+      await harness.view.refresh();
+
+      await discoverActionsOf(harness.view).archiveHotspots();
+
+      expect(harness.gateway.create).toHaveBeenCalledOnce();
+      const [path, content] = harness.gateway.create.mock.calls[0] ?? [];
+      expect(path).toBe(`${DEFAULT_SETTINGS.hotspotArchiveDir}/${formatTodayForTest()}-热点.md`);
+      expect(content).toContain('[A](https://a)');
+      expect(harness.openLinkText).toHaveBeenCalledWith(path, '', false);
+    });
+
+    it('copyDiscoveryPrompt 拼提示词并复制到剪贴板', async () => {
+      const action: WorkflowAction = {
+        id: 'spark-topics', label: '从热点+受众生成选题卡', description: '', group: '选题',
+        order: 3, needsFocus: false, output: '10-选题池/待评估',
+        body: '热点:\n{{hotspots}}\n受众:\n{{audience_signals}}',
+        sourcePath: 'p/11.md',
+      };
+      const value: DashboardModel = { ...model, workflowActions: [action] };
+      const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      const harness = makeHarness(async () => value);
+      await harness.view.refresh();
+      const hotspots: Hotspot[] = [
+        { title: 'Claude 4.8 发布', url: 'https://a', source: '官方', publishedAt: '2026-06-25', summary: null },
+      ];
+      const signals: AudienceSignal[] = [
+        { text: '怎么本地跑', kind: '问题', source: '评论档', weight: 3 },
+      ];
+
+      await discoverActionsOf(harness.view).copyDiscoveryPrompt(hotspots, signals);
+
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(writeText.mock.calls[0]?.[0]).toContain('Claude 4.8 发布');
+      expect(writeText.mock.calls[0]?.[0]).toContain('怎么本地跑');
+      expect(obsidianMock.notices.some((notice) => notice.includes('从热点+受众生成选题卡'))).toBe(true);
+    });
+
+    it('copyDiscoveryPrompt 在没有种子模板时提示', async () => {
+      const harness = makeHarness(async () => ({ ...model, workflowActions: [] }));
+      await harness.view.refresh();
+
+      await discoverActionsOf(harness.view).copyDiscoveryPrompt([], []);
+
+      expect(obsidianMock.notices).toContain('缺少发现模板，请先到「工作流」tab 生成默认提示词模板');
+    });
+  });
 });
+
+function formatTodayForTest(): string {
+  const d = new Date();
+  const y = String(d.getFullYear()).padStart(4, '0');
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

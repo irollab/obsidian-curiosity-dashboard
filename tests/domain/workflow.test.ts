@@ -16,6 +16,9 @@ function context(overrides: Partial<PromptContext> = {}): PromptContext {
     date: '2026-06-25',
     week: '2026-W26',
     ideas: '',
+    hotspots: '',
+    audienceSignals: '',
+    existingTitles: '',
     ...overrides,
   };
 }
@@ -33,5 +36,26 @@ describe('fillPlaceholders', () => {
   it('无焦点时焦点占位符填为空串', () => {
     const out = fillPlaceholders('script={{focus_script}} title={{focus_title}}', context({ focus: null }));
     expect(out).toBe('script= title=');
+  });
+});
+
+function baseContext(over: Partial<PromptContext> = {}): PromptContext {
+  return {
+    focus: null, inboxDir: '', topicDir: '', scriptDraftDir: '', assetDir: '',
+    reviewDir: '', topicTemplate: '', scriptTemplate: '', reviewTemplate: '',
+    date: '', week: '', ideas: '', hotspots: '', audienceSignals: '', existingTitles: '',
+    ...over,
+  };
+}
+
+describe('fillPlaceholders 发现占位符', () => {
+  it('填充 hotspots/audience_signals/existing_titles', () => {
+    const body = '热点:\n{{hotspots}}\n受众:\n{{audience_signals}}\n已有:\n{{existing_titles}}';
+    const out = fillPlaceholders(body, baseContext({
+      hotspots: '1. A', audienceSignals: '- 怎么用', existingTitles: '- 旧选题',
+    }));
+    expect(out).toContain('1. A');
+    expect(out).toContain('- 怎么用');
+    expect(out).toContain('- 旧选题');
   });
 });

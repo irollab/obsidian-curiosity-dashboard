@@ -29,6 +29,7 @@ export class FakeElement {
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, FakeListener[]>();
   readonly style = new FakeStyle();
+  checked = false;
   disabled = false;
   hidden = false;
   isConnected = true;

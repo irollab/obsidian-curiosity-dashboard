@@ -9,6 +9,10 @@ export type TranslationKey =
   | 'settings.promptDir'
   | 'settings.backgroundPath' | 'settings.logoPath' | 'settings.openOnStartup' | 'settings.defaultTab'
   | 'settings.enableMobileView'
+  | 'settings.commentDocPath' | 'settings.hotspotArchiveDir' | 'settings.rssSources'
+  | 'settings.hotspotCacheTtlHours' | 'settings.enabledHotspotSources'
+  | 'settings.source.hackerNews' | 'settings.source.githubTrending' | 'settings.source.rss'
+  | 'settings.source.officialRss' | 'settings.source.domesticTrending'
   | 'settings.language' | 'settings.language.auto' | 'settings.language.zh' | 'settings.language.en'
   | 'settings.saveFailed'
   | 'common.unknownError' | 'common.unset' | 'common.cancel' | 'common.create'
@@ -16,7 +20,7 @@ export type TranslationKey =
   | 'common.unavailableMobileReadonly' | 'common.unavailableReason' | 'common.unknownReason'
   | 'common.labelPath' | 'common.contextDetail'
   | 'stage.unknown'
-  | 'tab.overview' | 'tab.tasks' | 'tab.workflow' | 'tab.data' | 'tabs.aria'
+  | 'tab.overview' | 'tab.tasks' | 'tab.workflow' | 'tab.discover' | 'tab.data' | 'tabs.aria'
   | 'workflow.deckEmptyTitle' | 'workflow.deckEmptyBody' | 'workflow.seedButton'
   | 'workflow.groupGeneral' | 'workflow.copyButton' | 'workflow.openOutput'
   | 'workflow.focusContext' | 'workflow.needsFocus' | 'workflow.readonlyOutput'
@@ -47,6 +51,8 @@ export type TranslationKey =
   | 'quickActions.title' | 'quickActions.readonlyReason'
   | 'dock.ideas' | 'dock.mission' | 'dock.tasks' | 'dock.script' | 'dock.data'
   | 'dock.review' | 'dock.settings' | 'dock.aria'
+  | 'footer.copyright' | 'footer.email' | 'footer.poweredBy'
+  | 'footer.github' | 'footer.githubAria'
   | 'dock.reason.mobileCreateTopic' | 'dock.reason.noFocus'
   | 'dock.reason.mobileCreate' | 'dock.reason.notLinked'
   | 'workPicker.title' | 'workPicker.empty'
@@ -70,7 +76,14 @@ export type TranslationKey =
   | 'view.saveTabFailed' | 'view.saveAssociationFailed' | 'view.switchFocusFailed'
   | 'view.mobileReadonlyModify'
   | 'view.noSettingsEntry' | 'view.openSettingsFailed'
-  | 'error.autoRefreshFailed' | 'error.openFailed' | 'error.openOnStartupFailed';
+  | 'error.autoRefreshFailed' | 'error.openFailed' | 'error.openOnStartupFailed'
+  | 'discover.title' | 'discover.refresh' | 'discover.refreshing'
+  | 'discover.archive' | 'discover.archived' | 'discover.archiveEmpty'
+  | 'discover.hotspotsHeading' | 'discover.signalsHeading' | 'discover.empty' | 'discover.signalsEmpty'
+  | 'discover.sourceFailed' | 'discover.copyButton' | 'discover.copied' | 'discover.selectHint'
+  | 'discover.noTemplate' | 'discover.fetchFailed' | 'discover.staleAt'
+  | 'discover.prevPage' | 'discover.nextPage' | 'discover.pageInfo'
+  | 'discover.templateMissing' | 'discover.seedTemplate' | 'discover.filterAll';
 
 export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.heading': { zh: 'Curiosity Dashboard', en: 'Curiosity Dashboard' },
@@ -87,6 +100,16 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.openOnStartup': { zh: '启动时打开', en: 'Open on startup' },
   'settings.defaultTab': { zh: '默认标签页', en: 'Default tab' },
   'settings.enableMobileView': { zh: '启用移动端简化视图', en: 'Enable simplified mobile view' },
+  'settings.commentDocPath': { zh: '评论收集档路径', en: 'Comment doc path' },
+  'settings.hotspotArchiveDir': { zh: '热点归档目录', en: 'Hotspot archive dir' },
+  'settings.rssSources': { zh: 'RSS 订阅源（每行一个）', en: 'RSS feeds (one per line)' },
+  'settings.hotspotCacheTtlHours': { zh: '热点缓存有效期（小时）', en: 'Hotspot cache TTL (hours)' },
+  'settings.enabledHotspotSources': { zh: '启用的热点源', en: 'Enabled hotspot sources' },
+  'settings.source.hackerNews': { zh: 'Hacker News', en: 'Hacker News' },
+  'settings.source.githubTrending': { zh: 'GitHub Trending', en: 'GitHub Trending' },
+  'settings.source.rss': { zh: '订阅 RSS', en: 'Subscribed RSS' },
+  'settings.source.officialRss': { zh: '官方发布', en: 'Official releases' },
+  'settings.source.domesticTrending': { zh: '国内热榜（第三方聚合，默认关）', en: 'Domestic trending (3rd-party, off by default)' },
   'settings.language': { zh: '界面语言', en: 'Language' },
   'settings.language.auto': { zh: '跟随 Obsidian', en: 'Follow Obsidian' },
   'settings.language.zh': { zh: '中文', en: '中文' },
@@ -116,6 +139,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'tab.overview': { zh: '概览', en: 'Overview' },
   'tab.tasks': { zh: '任务', en: 'Tasks' },
   'tab.workflow': { zh: '工作流', en: 'Workflow' },
+  'tab.discover': { zh: '发现', en: 'Discover' },
   'tab.data': { zh: '数据', en: 'Data' },
   'tabs.aria': { zh: '工作台视图', en: 'Dashboard views' },
   'workflow.deckEmptyTitle': { zh: '还没有提示词模板', en: 'No prompt templates yet' },
@@ -244,6 +268,11 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'dock.review': { zh: '复盘', en: 'Review' },
   'dock.settings': { zh: '设置', en: 'Settings' },
   'dock.aria': { zh: '工作台快捷入口', en: 'Dashboard shortcuts' },
+  'footer.poweredBy': { zh: 'Powered by iRollab', en: 'Powered by iRollab' },
+  'footer.copyright': { zh: '© 2026 iRollab', en: '© 2026 iRollab' },
+  'footer.email': { zh: '邮箱：th@tancem.cn', en: 'Email: th@tancem.cn' },
+  'footer.github': { zh: '开源仓库', en: 'Open source' },
+  'footer.githubAria': { zh: 'GitHub 开源仓库（新窗口打开）', en: 'GitHub repository (opens in new tab)' },
   'dock.reason.mobileCreateTopic': {
     zh: '移动端只读，不能创建选题卡', en: 'Read-only on mobile; cannot create topic card',
   },
@@ -341,6 +370,42 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'error.openOnStartupFailed': {
     zh: '无法在启动时打开 Curiosity Dashboard', en: 'Unable to open Curiosity Dashboard on startup',
   },
+  'discover.title': { zh: '灵感发现', en: 'Idea Discovery' },
+  'discover.refresh': { zh: '刷新热点', en: 'Refresh hotspots' },
+  'discover.refreshing': { zh: '抓取中…', en: 'Fetching…' },
+  'discover.archive': { zh: '归档本次热点', en: 'Archive hotspots' },
+  'discover.archived': { zh: '已归档到 {path}', en: 'Archived to {path}' },
+  'discover.archiveEmpty': { zh: '没有可归档的热点', en: 'No hotspots to archive' },
+  'discover.hotspotsHeading': { zh: '热点', en: 'Hotspots' },
+  'discover.signalsHeading': { zh: '受众反馈', en: 'Audience feedback' },
+  'discover.empty': { zh: '还没有热点，点「刷新热点」开始', en: 'No hotspots yet — click “Refresh hotspots”' },
+  'discover.signalsEmpty': {
+    zh: '暂无受众信号（去复盘补 audience_questions，或填评论收集档）',
+    en: 'No audience signals yet',
+  },
+  'discover.sourceFailed': {
+    zh: '⚠️ {label} 抓取失败，显示上次缓存', en: '⚠️ {label} fetch failed, showing cache',
+  },
+  'discover.copyButton': { zh: '生成选题提示词', en: 'Build topic prompt' },
+  'discover.copied': {
+    zh: '已复制「{label}」，去 Codex 粘贴执行，输出到 {output}',
+    en: 'Copied “{label}”, paste into Codex; output to {output}',
+  },
+  'discover.selectHint': {
+    zh: '勾选热点与受众信号后生成提示词', en: 'Select hotspots and signals to build a prompt',
+  },
+  'discover.noTemplate': {
+    zh: '缺少发现模板，请先到「工作流」tab 生成默认提示词模板',
+    en: 'Discovery template missing — seed default prompts in the Workflow tab first',
+  },
+  'discover.fetchFailed': { zh: '热点抓取失败：{detail}', en: 'Hotspot fetch failed: {detail}' },
+  'discover.staleAt': { zh: '数据时间：{time}', en: 'Data time: {time}' },
+  'discover.prevPage': { zh: '上一页', en: 'Prev' },
+  'discover.nextPage': { zh: '下一页', en: 'Next' },
+  'discover.pageInfo': { zh: '第 {page}/{total} 页 · 共 {count} 条', en: 'Page {page}/{total} · {count} total' },
+  'discover.templateMissing': { zh: '还缺少「发现」选题模板，点右侧按钮一键生成。', en: 'The discovery topic template is missing. Click to generate it.' },
+  'discover.seedTemplate': { zh: '生成发现模板', en: 'Generate template' },
+  'discover.filterAll': { zh: '全部', en: 'All' },
 };
 
 export const STAGE_LABELS: Record<Locale, Record<Stage, string>> = {

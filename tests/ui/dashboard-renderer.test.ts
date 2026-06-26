@@ -8,7 +8,7 @@ vi.mock('obsidian', () => ({
 
 import type { DashboardModel, TopicRecord } from '@/domain/models';
 import { createTranslator } from '@/i18n/translator';
-import { DashboardRenderer, type DashboardHandlers } from '@/ui/dashboard-renderer';
+import { DashboardRenderer, type DashboardHandlers, type DashboardTab } from '@/ui/dashboard-renderer';
 
 import { FakeElement, fakeDocument, findAll, findByText } from '../support/fake-dom';
 
@@ -47,6 +47,8 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
     promptTemplatesPresent: false,
     promptTemplatesSkipped: [],
     ideas: [],
+    audienceSignals: [],
+    hotspots: [],
     ...overrides,
   };
 }
@@ -71,10 +73,14 @@ function handlers(): DashboardHandlers {
     switchFocus: vi.fn(async () => undefined),
     openWorkPicker: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
+    refreshHotspots: vi.fn(async () => undefined),
+    archiveHotspots: vi.fn(async () => undefined),
+    copyDiscoveryPrompt: vi.fn(async () => undefined),
+    openHotspot: vi.fn(),
   };
 }
 
-function render(value: DashboardModel, activeTab: 'overview' | 'tasks' | 'data' = 'overview') {
+function render(value: DashboardModel, activeTab: DashboardTab = 'overview') {
   const root = new FakeElement();
   const actions = handlers();
   new DashboardRenderer().render(
@@ -169,7 +175,7 @@ describe('DashboardRenderer', () => {
     const tabs = findAll(root, (element) => element.getAttr('role') === 'tab');
     const tasks = tabs.find((element) => element.text === '任务');
 
-    expect(tabs).toHaveLength(4);
+    expect(tabs).toHaveLength(5);
     expect(tasks?.tag).toBe('button');
     expect(tasks?.type).toBe('button');
     expect(tasks?.getAttr('aria-selected')).toBe('true');
@@ -184,14 +190,15 @@ describe('DashboardRenderer', () => {
     const { root } = render(model(), 'tasks');
     const panels = findAll(root, (element) => element.getAttr('role') === 'tabpanel');
 
-    expect(panels).toHaveLength(4);
+    expect(panels).toHaveLength(5);
     expect(panels.map((panel) => panel.getAttr('id'))).toEqual([
       'curiosity-panel-overview',
       'curiosity-panel-tasks',
       'curiosity-panel-workflow',
+      'curiosity-panel-discover',
       'curiosity-panel-data',
     ]);
-    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true, true]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true, true, true]);
     expect(findByText(panels[1]!, '任务中心')).toBeDefined();
     expect(findByText(panels[0]!, '任务中心')).toBeUndefined();
   });
@@ -309,5 +316,16 @@ describe('DashboardRenderer', () => {
     expect(panel).toBeDefined();
     expect(findByText(root, '任务中心')).toBeUndefined();
     expect(findByText(root, '0')).toBeUndefined();
+  });
+
+  it('discover tab 渲染发现面板标题', () => {
+    const { root } = render(model(), 'discover');
+    const panel = findAll(
+      root,
+      (element) => element.classList.has('curiosity-tab-panel--discover'),
+    )[0];
+
+    expect(panel).not.toBeUndefined();
+    expect(root.textContent).toContain('灵感发现');
   });
 });

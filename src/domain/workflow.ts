@@ -35,6 +35,9 @@ export interface PromptContext {
   date: string;
   week: string;
   ideas: string;
+  hotspots: string;
+  audienceSignals: string;
+  existingTitles: string;
 }
 
 const TOKEN = /\{\{(\w+)\}\}/g;
@@ -66,5 +69,8 @@ function tokenValues(context: PromptContext): Record<string, string> {
     date: context.date,
     week: context.week,
     ideas: context.ideas,
+    hotspots: context.hotspots,
+    audience_signals: context.audienceSignals,
+    existing_titles: context.existingTitles,
   };
 }
