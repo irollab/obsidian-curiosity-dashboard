@@ -289,6 +289,19 @@ function findByText(
   return root.textContent === text ? root : undefined;
 }
 
+// 候选项现为「button > track > label」结构，点击需命中带 listener 的 button 而非文本叶子。
+function findCandidateButton(
+  root: InstanceType<typeof obsidianMock.FakeElement>,
+  title: string,
+): InstanceType<typeof obsidianMock.FakeElement> | undefined {
+  if (root.classList.has('curiosity-association-candidate') && root.getAttr('title') === title) return root;
+  for (const child of root.children) {
+    const match = findCandidateButton(child, title);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
 function findDock(
   root: InstanceType<typeof obsidianMock.FakeElement>,
 ): InstanceType<typeof obsidianMock.FakeElement> | undefined {
@@ -967,7 +980,7 @@ describe('CuriosityDashboardView', () => {
     }));
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, candidate)?.click();
+    findCandidateButton(harness.view.contentEl, candidate)?.click();
 
     await vi.waitFor(() => expect(harness.mutation.setAssociationPath).toHaveBeenCalledWith(
       topic.path,

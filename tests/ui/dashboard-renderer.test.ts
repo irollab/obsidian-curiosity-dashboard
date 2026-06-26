@@ -219,12 +219,40 @@ describe('DashboardRenderer', () => {
     expect(actions.toggleTask).toHaveBeenCalledWith(topic.path, task);
     findByText(root, '脚本')?.click();
     expect(actions.openPath).toHaveBeenCalledWith(topic.scriptPath);
-    findByText(root, '20-素材库/39-b')?.click();
+    const candidate = findAll(
+      root,
+      (element) =>
+        element.classList.has('curiosity-association-candidate') && element.getAttr('title') === '20-素材库/39-b',
+    )[0];
+    candidate?.click();
     expect(actions.setAssociation).toHaveBeenCalledWith(
       topic.path,
       'asset_path',
       '20-素材库/39-b',
     );
+  });
+
+  it('renders each association candidate full-width on one line with the marquee track structure', () => {
+    const first = '40-脚本大纲/成稿/39-A成稿.md';
+    const second = '40-脚本大纲/草稿/39-A脚本大纲.md';
+    const { root } = render(model({
+      associationCandidates: { assetPath: [], reviewPath: [], scriptPath: [first, second] },
+    }));
+
+    const buttons = findAll(
+      root,
+      (element) => element.classList.has('curiosity-association-candidate'),
+    );
+    expect(buttons).toHaveLength(2);
+    // 完整路径保留在 title（悬浮可读）与聚合文本（点击/句柄不变）。
+    expect(buttons[0]?.getAttr('title')).toBe(first);
+    expect(buttons[0]?.textContent).toBe(first);
+    // 跑马灯结构：button > track（裁剪窗口）> label（完整路径），复用 hero 焦点切换器样式。
+    const track = buttons[0]?.children[0];
+    expect(track?.classList.has('curiosity-focus-chip-track')).toBe(true);
+    const label = track?.children[0];
+    expect(label?.classList.has('curiosity-focus-chip-label')).toBe(true);
+    expect(label?.text).toBe(first);
   });
 
   it('guards pending writes against double click and restores a connected button after failure', async () => {
@@ -271,7 +299,12 @@ describe('DashboardRenderer', () => {
     expect(findByText(root, '推进阶段')?.disabled).toBe(true);
     if (mobileReadOnly) {
       expect(findByText(root, '完成首页开发验证')?.disabled).toBe(true);
-      expect(findByText(root, '20-素材库/39-a')?.disabled).toBe(true);
+      // 移动只读时 title 被改写为只读提示，按类取首个候选按钮即可。
+      const candidate = findAll(
+        root,
+        (element) => element.classList.has('curiosity-association-candidate'),
+      )[0];
+      expect(candidate?.disabled).toBe(true);
       expect(findByText(root, '移动端只读：任务、关联路径和阶段推进不可修改。')).toBeDefined();
       expect(findByText(root, '完成首页开发验证')?.getAttr('aria-describedby')).toBe(
         'curiosity-mobile-readonly-help',

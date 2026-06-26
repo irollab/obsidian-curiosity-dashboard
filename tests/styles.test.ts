@@ -118,6 +118,20 @@ describe('dashboard stylesheet contract', () => {
     expect(css).toMatch(/\.curiosity-dashboard \.curiosity-dock[^}]*overflow-x:\s*auto/s);
   });
 
+  it('renders full-width single-line candidates whose long paths reveal via the chip marquee', async () => {
+    const css = await stylesheet();
+    const candidateButton = blockAfter(
+      css,
+      '.curiosity-dashboard .curiosity-association-group button.curiosity-association-candidate {',
+    );
+    // 全宽铺满 + 单行裁剪窗口：长路径不换行，靠复用的 focus-chip 跑马灯横向滚动看全。
+    expect(candidateButton).toMatch(/width:\s*100%/);
+    expect(candidateButton).toMatch(/white-space:\s*nowrap/);
+    expect(candidateButton).toMatch(/overflow:\s*hidden/);
+    // 复用 hero 焦点切换器的跑马灯动画（is-overflow + 位移变量）。
+    expect(css).toMatch(/\.curiosity-focus-chip-label\.is-overflow[^}]*animation:\s*curiosity-chip-marquee/s);
+  });
+
   it('contains the dock inside the dashboard leaf and stacks the queue below 1280px', async () => {
     const css = await stylesheet();
     const dock = blockAfter(css, '.curiosity-dashboard .curiosity-dock');

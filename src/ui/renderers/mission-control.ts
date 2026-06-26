@@ -4,6 +4,7 @@ import type { Translator } from '@/i18n/translator';
 
 import type { AssociationField, DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
+import { enableOverflowMarquee } from '../overflow-marquee';
 import { focusMeta, renderWindowTitlebar } from './window-frame';
 
 export function renderMissionControl(
@@ -191,12 +192,18 @@ function renderQuickLook(
     if (candidates.length <= 1) continue;
     const group = card.createDiv({ cls: 'curiosity-association-group' });
     group.createEl('p', { text: t.t('mission.multipleCandidates', { label }) });
+    const scroller = group.createDiv({ cls: 'curiosity-association-candidates' });
     for (const candidate of candidates) {
-      const button = group.createEl('button', {
-        cls: 'curiosity-write-action',
-        text: candidate,
+      const button = scroller.createEl('button', {
+        cls: 'curiosity-write-action curiosity-association-candidate',
         type: 'button',
+        attr: { title: candidate },
       });
+      // 整段长路径在窄面板里放不下：单行铺满、溢出部分复用 hero 焦点切换器的横向跑马灯动画看全，
+      // 而非换行成多行被裁切。track 为裁剪窗口，label 承载完整路径（按钮聚合文本仍等于完整路径）。
+      const track = button.createSpan({ cls: 'curiosity-focus-chip-track' });
+      const label = track.createSpan({ cls: 'curiosity-focus-chip-label', text: candidate });
+      enableOverflowMarquee(track, label);
       button.disabled = model.mobileReadOnly;
       if (model.mobileReadOnly) {
         button.setAttr('title', t.t('common.mobileReadonlyMode'));

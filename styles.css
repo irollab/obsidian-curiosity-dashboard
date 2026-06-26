@@ -760,7 +760,7 @@
 
 .curiosity-dashboard .curiosity-association-group {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--curiosity-line);
@@ -768,14 +768,31 @@
 
 .curiosity-dashboard .curiosity-association-group p {
   margin: 0;
+  padding-left: 0;
   color: var(--curiosity-muted);
   font-size: 12px;
 }
 
-.curiosity-dashboard .curiosity-association-group button {
+.curiosity-dashboard .curiosity-association-candidates {
+  /* 候选过多时容器内纵向滚动；每个候选铺满整宽，长路径靠横向跑马灯看全（见下方 chip-track 复用）。 */
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.curiosity-dashboard .curiosity-association-group button.curiosity-association-candidate {
+  /* 全宽单行候选：button 自带 padding 作为留白，overflow:hidden 为内部 track 提供裁剪窗口，长路径靠跑马灯看全。 */
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  font-size: 11px;
+  font-size: 12.5px;
+  text-align: left;
 }
 
 .curiosity-dashboard .curiosity-mission > .curiosity-primary {

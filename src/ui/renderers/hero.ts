@@ -3,6 +3,7 @@ import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
 import { bindGuardedAction } from '../guarded-action';
+import { enableOverflowMarquee } from '../overflow-marquee';
 
 export function renderHero(
   parent: HTMLElement,
@@ -147,21 +148,6 @@ function renderFocusSwitcher(
       bindGuardedAction(chip, () => handlers.switchFocus(candidate.path));
     }
   }
-}
-
-function enableOverflowMarquee(track: HTMLElement, label: HTMLElement): void {
-  // track 是 content-box 裁剪窗口（padding 留在 button 上不参与裁剪）；
-  // 文字溢出时由 JS 精确计算位移，测试桩无布局度量则安全跳过。
-  const apply = (): void => {
-    const trackWidth = track.clientWidth;
-    const labelWidth = label.scrollWidth;
-    if (typeof trackWidth !== 'number' || typeof labelWidth !== 'number') return;
-    if (labelWidth <= trackWidth + 1) return;
-    label.style.setProperty('--curiosity-chip-shift', `${trackWidth - labelWidth}px`);
-    label.addClass('is-overflow');
-  };
-  apply();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
 }
 
 function factCard(parent: HTMLElement, label: string, value: string, variant: string): void {
