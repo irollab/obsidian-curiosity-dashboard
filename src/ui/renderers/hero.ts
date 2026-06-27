@@ -73,9 +73,10 @@ export function renderHero(
     stage === null ? t.t('stage.unknown') : t.stageLabel(stage),
     stage === null ? 'is-invalid' : 'is-stage',
   );
-  // 下一步：手动 next_action 优先；否则自动取本期清单第一个未勾选项；都没有才显示未设置。
+  // 下一步：清单优先——取本期清单第一个未勾选项（跟随真实进度，避免手动 next_action 陈旧）；
+  // 清单全部勾选或无清单时，才回退手动 next_action；都没有才显示未设置。
   const firstPendingTask = model.tasks.find((task) => !task.checked)?.text ?? null;
-  const nextAction = topic.nextAction ?? firstPendingTask;
+  const nextAction = firstPendingTask ?? topic.nextAction;
   factCard(facts, t.t('hero.nextActionLabel'), nextAction ?? t.t('hero.nextActionUnset'), 'is-next');
 
   const actions = body.createDiv({ cls: 'curiosity-hero-actions' });

@@ -302,6 +302,19 @@ function findCandidateButton(
   return undefined;
 }
 
+// hero「下一步」清单优先后可能与任务同文案；点任务时按 .curiosity-task 类定位按钮，避开 hero fact-value。
+function findTaskButton(
+  root: InstanceType<typeof obsidianMock.FakeElement>,
+  text: string,
+): InstanceType<typeof obsidianMock.FakeElement> | undefined {
+  if (root.classList.has('curiosity-task') && root.textContent === text) return root;
+  for (const child of root.children) {
+    const match = findTaskButton(child, text);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
 function findDock(
   root: InstanceType<typeof obsidianMock.FakeElement>,
 ): InstanceType<typeof obsidianMock.FakeElement> | undefined {
@@ -528,7 +541,7 @@ describe('CuriosityDashboardView', () => {
     harness.mutation.toggleTask.mockRejectedValueOnce(new Error('Task changed; refresh and try again'));
     await harness.view.refresh();
 
-    findByText(harness.view.contentEl, task.text)?.click();
+    findTaskButton(harness.view.contentEl, task.text)?.click();
     await vi.waitFor(() => expect(harness.mutation.toggleTask).toHaveBeenCalledWith('10-选题池/39.md', task));
     await vi.waitFor(() => expect(obsidianMock.notices).toContain(
       '无法更新任务：Task changed; refresh and try again',

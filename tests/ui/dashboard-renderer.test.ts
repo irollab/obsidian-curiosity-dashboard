@@ -53,6 +53,11 @@ function model(overrides: Partial<DashboardModel> = {}): DashboardModel {
   };
 }
 
+// hero「下一步」清单优先后，可能与某个任务按钮同文案；定位可点击任务按钮时跳过纯文本节点（如 hero fact-value）。
+function findButtonByText(root: FakeElement, text: string): FakeElement | undefined {
+  return findAll(root, (element) => element.tag === 'button' && element.textContent === text)[0];
+}
+
 function handlers(): DashboardHandlers {
   return {
     confirmAdvance: vi.fn(async () => undefined),
@@ -98,10 +103,40 @@ describe('DashboardRenderer', () => {
     expect(findByText(root, '第 39 期')).toBeDefined();
     expect(findByText(root, topic.title)).toBeDefined();
     expect(findByText(root, '制作')).toBeDefined();
-    expect(findByText(root, '确认视觉结构')).toBeDefined();
+    // 「下一步」清单优先：有未勾选清单项时显示清单项，而非陈旧的 next_action。
+    expect(findByText(root, '完成首页开发验证')).toBeDefined();
     expect(shell?.style.getPropertyValue('--curiosity-background')).toBe(
       'url("app://vault/space%22%29;color:red%29.png")',
     );
+  });
+
+  it('derives the hero next step from the first unchecked task, falling back to next_action', () => {
+    const nextStepValue = (root: FakeElement): string | undefined => {
+      const card = findAll(
+        root,
+        (element) => element.classList.has('curiosity-fact-card') && element.classList.has('is-next'),
+      )[0];
+      return card === undefined
+        ? undefined
+        : findAll(card, (element) => element.classList.has('curiosity-fact-value'))[0]?.text;
+    };
+
+    // 有未勾选清单项：用清单首个未勾选项，忽略已完成（陈旧）的 next_action。
+    const pending = render(model({
+      focus: { kind: 'ready', topic: { ...topic, stage: '制作', nextAction: '创建脚本大纲与成稿' } },
+      tasks: [
+        { checked: true, line: 1, text: '创建脚本大纲与成稿' },
+        { checked: false, line: 2, text: '录制演示并发布' },
+      ],
+    }));
+    expect(nextStepValue(pending.root)).toBe('录制演示并发布');
+
+    // 清单全部勾选：回退到手动 next_action。
+    const done = render(model({
+      focus: { kind: 'ready', topic: { ...topic, stage: '制作', nextAction: '推进阶段' } },
+      tasks: [{ checked: true, line: 1, text: '录制演示并发布' }],
+    }));
+    expect(nextStepValue(done.root)).toBe('推进阶段');
   });
 
   it('opens the current script or creates one without conflating it with the topic card', () => {
@@ -215,7 +250,7 @@ describe('DashboardRenderer', () => {
     });
     const { root, actions } = render(value);
 
-    findByText(root, task.text)?.click();
+    findButtonByText(root, task.text)?.click();
     expect(actions.toggleTask).toHaveBeenCalledWith(topic.path, task);
     findByText(root, '脚本')?.click();
     expect(actions.openPath).toHaveBeenCalledWith(topic.scriptPath);
@@ -264,7 +299,7 @@ describe('DashboardRenderer', () => {
     const value = model({ tasks: [task] });
     const { root, actions } = render(value);
     vi.mocked(actions.toggleTask).mockReturnValueOnce(pending);
-    const button = findByText(root, task.text);
+    const button = findButtonByText(root, task.text);
 
     button?.click();
     button?.click();
@@ -298,7 +333,8 @@ describe('DashboardRenderer', () => {
 
     expect(findByText(root, '推进阶段')?.disabled).toBe(true);
     if (mobileReadOnly) {
-      expect(findByText(root, '完成首页开发验证')?.disabled).toBe(true);
+      const taskButton = findButtonByText(root, '完成首页开发验证');
+      expect(taskButton?.disabled).toBe(true);
       // 移动只读时 title 被改写为只读提示，按类取首个候选按钮即可。
       const candidate = findAll(
         root,
@@ -306,7 +342,7 @@ describe('DashboardRenderer', () => {
       )[0];
       expect(candidate?.disabled).toBe(true);
       expect(findByText(root, '移动端只读：任务、关联路径和阶段推进不可修改。')).toBeDefined();
-      expect(findByText(root, '完成首页开发验证')?.getAttr('aria-describedby')).toBe(
+      expect(taskButton?.getAttr('aria-describedby')).toBe(
         'curiosity-mobile-readonly-help',
       );
     }
