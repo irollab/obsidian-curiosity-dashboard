@@ -591,6 +591,30 @@ describe('promote tab', () => {
     expect(promote).toHaveBeenCalledWith('10-选题池/待评估/42.md');
   });
 
+  it('待评估超过每页条数时分页，下一页显示剩余条目', () => {
+    const root = new FakeElement();
+    const pending = Array.from({ length: 13 }, (_, i) => ({
+      ...topic, path: `10-选题池/待评估/${100 + i}.md`, basename: String(100 + i),
+      issue: 100 + i, title: `待评估${100 + i}`, stage: null, status: '待评估', homepageFocus: false,
+    }));
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ pickableTopics: pending }),
+      handlers(), 'promote' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(findAll(root, (e) => e.classList.has('curiosity-pending-item'))).toHaveLength(10);
+    expect(root.textContent).toContain('第 1/2 页 · 共 13 条');
+
+    const next = findAll(root, (e) => e.classList.has('curiosity-discover-page-btn'))
+      .find((button) => button.textContent === '下一页');
+    expect(next).toBeDefined();
+    next?.click();
+
+    expect(findAll(root, (e) => e.classList.has('curiosity-pending-item'))).toHaveLength(3);
+    expect(root.textContent).toContain('第 2/2 页');
+  });
+
   it('无待评估卡时显示空态提示', () => {
     const root = new FakeElement();
     new DashboardRenderer().render(
