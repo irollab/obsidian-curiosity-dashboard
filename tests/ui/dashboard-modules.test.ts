@@ -568,6 +568,55 @@ describe('workflow deck tab', () => {
   });
 });
 
+describe('promote tab', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('列出待评估（无阶段）选题并提供立项按钮，已入流水线的不显示', () => {
+    const root = new FakeElement();
+    const promote = vi.fn(async () => undefined);
+    const actions = { ...handlers(), promoteTopic: promote };
+    const pending = { ...topic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估卡', stage: null, status: '待评估', homepageFocus: false };
+    const staged = { ...topic, path: '10-选题池/已立项/40.md', basename: '40', issue: 40, title: '已规划', stage: '选题' as const, homepageFocus: false };
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ pickableTopics: [pending, staged] }),
+      actions, 'promote' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(findByText(root, '待评估卡')).not.toBeUndefined();
+    expect(findByText(root, '已规划')).toBeUndefined();
+    const promoteBtn = findAll(root, (element) => element.classList.has('curiosity-pending-promote'))[0];
+    expect(promoteBtn).not.toBeUndefined();
+    promoteBtn?.click();
+    expect(promote).toHaveBeenCalledWith('10-选题池/待评估/42.md');
+  });
+
+  it('无待评估卡时显示空态提示', () => {
+    const root = new FakeElement();
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ pickableTopics: [] }),
+      handlers(), 'promote' as DashboardTab, createTranslator('zh'),
+    );
+
+    expect(root.textContent).toContain('暂无待评估选题');
+    expect(findAll(root, (element) => element.classList.has('curiosity-pending-promote'))).toHaveLength(0);
+  });
+
+  it('移动只读时立项按钮禁用', () => {
+    const root = new FakeElement();
+    const pending = { ...topic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估卡', stage: null, status: '待评估', homepageFocus: false };
+    new DashboardRenderer().render(
+      root as unknown as HTMLElement,
+      model({ pickableTopics: [pending], mobileReadOnly: true }),
+      handlers(), 'promote' as DashboardTab, createTranslator('zh'),
+    );
+
+    const promoteBtn = findAll(root, (element) => element.classList.has('curiosity-pending-promote'))[0];
+    expect((promoteBtn as unknown as { disabled: boolean }).disabled).toBe(true);
+  });
+});
+
 describe('discover deck tab', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -602,39 +651,6 @@ describe('discover deck tab', () => {
     expect(copy).not.toBeUndefined();
     copy?.click();
     expect(copied).toBe(true);
-  });
-
-  it('列出待评估（无阶段）选题并提供立项按钮，已入流水线的不显示', () => {
-    const root = new FakeElement();
-    const promote = vi.fn(async () => undefined);
-    const actions = { ...handlers(), promoteTopic: promote };
-    const pending = { ...topic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估卡', stage: null, status: '待评估', homepageFocus: false };
-    const staged = { ...topic, path: '10-选题池/已立项/40.md', basename: '40', issue: 40, title: '已规划', stage: '选题' as const, homepageFocus: false };
-    new DashboardRenderer().render(
-      root as unknown as HTMLElement,
-      model({ hotspots: [], audienceSignals: [], pickableTopics: [pending, staged] }),
-      actions, 'discover' as DashboardTab, createTranslator('zh'),
-    );
-
-    expect(findByText(root, '待评估卡')).not.toBeUndefined();
-    expect(findByText(root, '已规划')).toBeUndefined();
-    const promoteBtn = findAll(root, (element) => element.classList.has('curiosity-pending-promote'))[0];
-    expect(promoteBtn).not.toBeUndefined();
-    promoteBtn?.click();
-    expect(promote).toHaveBeenCalledWith('10-选题池/待评估/42.md');
-  });
-
-  it('移动只读时立项按钮禁用', () => {
-    const root = new FakeElement();
-    const pending = { ...topic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估卡', stage: null, status: '待评估', homepageFocus: false };
-    new DashboardRenderer().render(
-      root as unknown as HTMLElement,
-      model({ hotspots: [], audienceSignals: [], pickableTopics: [pending], mobileReadOnly: true }),
-      handlers(), 'discover' as DashboardTab, createTranslator('zh'),
-    );
-
-    const promoteBtn = findAll(root, (element) => element.classList.has('curiosity-pending-promote'))[0];
-    expect((promoteBtn as unknown as { disabled: boolean }).disabled).toBe(true);
   });
 
   it('无热点时渲染空态与刷新按钮', () => {

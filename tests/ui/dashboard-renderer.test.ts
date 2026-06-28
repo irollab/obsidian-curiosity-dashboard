@@ -211,7 +211,7 @@ describe('DashboardRenderer', () => {
     const tabs = findAll(root, (element) => element.getAttr('role') === 'tab');
     const tasks = tabs.find((element) => element.text === '任务');
 
-    expect(tabs).toHaveLength(5);
+    expect(tabs).toHaveLength(6);
     expect(tasks?.tag).toBe('button');
     expect(tasks?.type).toBe('button');
     expect(tasks?.getAttr('aria-selected')).toBe('true');
@@ -226,15 +226,16 @@ describe('DashboardRenderer', () => {
     const { root } = render(model(), 'tasks');
     const panels = findAll(root, (element) => element.getAttr('role') === 'tabpanel');
 
-    expect(panels).toHaveLength(5);
+    expect(panels).toHaveLength(6);
     expect(panels.map((panel) => panel.getAttr('id'))).toEqual([
       'curiosity-panel-overview',
       'curiosity-panel-tasks',
       'curiosity-panel-workflow',
+      'curiosity-panel-promote',
       'curiosity-panel-discover',
       'curiosity-panel-data',
     ]);
-    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true, true, true]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true, true, true, true]);
     expect(findByText(panels[1]!, '任务中心')).toBeDefined();
     expect(findByText(panels[0]!, '任务中心')).toBeUndefined();
   });

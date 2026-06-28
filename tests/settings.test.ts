@@ -279,7 +279,7 @@ describe('dashboard settings', () => {
       { kind: 'dropdown', name: 'Language', value: 'auto' },
     ]);
     expect(obsidianMock.settings[20]?.options).toEqual({
-      overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', discover: 'Discover', data: 'Data',
+      overview: 'Overview', tasks: 'Tasks', workflow: 'Workflow', promote: 'Promote', discover: 'Discover', data: 'Data',
     });
     expect(obsidianMock.settings[22]?.options).toEqual({ auto: 'Follow Obsidian', zh: '中文', en: 'English' });
   });

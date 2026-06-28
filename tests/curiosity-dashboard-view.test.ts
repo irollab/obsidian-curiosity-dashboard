@@ -217,7 +217,7 @@ const model: DashboardModel = {
 function makeHarness(
   load: () => Promise<DashboardModel>,
   enableMobileView = true,
-  defaultTab: 'overview' | 'tasks' | 'workflow' | 'discover' | 'data' = 'tasks',
+  defaultTab: 'overview' | 'tasks' | 'workflow' | 'promote' | 'discover' | 'data' = 'tasks',
 ) {
   const mutation = {
     advanceStage: vi.fn(async () => '发布' as const),
@@ -585,7 +585,7 @@ describe('CuriosityDashboardView', () => {
     expect(passed.map((entry) => entry.issue).sort((a, b) => a - b)).toEqual([39, 40]);
   });
 
-  it('发现 tab 点「立项」把待评估卡升入流水线并转移焦点', async () => {
+  it('立项 tab 点「立项」把待评估卡升入流水线并转移焦点', async () => {
     const focusTopic = {
       path: '10-选题池/已立项/39.md', basename: '39', title: '当前', issue: 39,
       status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
@@ -596,7 +596,7 @@ describe('CuriosityDashboardView', () => {
       ...model,
       focus: { kind: 'ready', topic: focusTopic },
       pickableTopics: [pending, focusTopic],
-    }), true, 'discover');
+    }), true, 'promote');
     await harness.view.refresh();
 
     findByClass(harness.view.contentEl, 'curiosity-pending-promote')?.click();

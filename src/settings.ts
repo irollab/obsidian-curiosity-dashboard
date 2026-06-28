@@ -24,7 +24,7 @@ export interface DashboardSettings {
   backgroundPath: string;
   logoPath: string;
   openOnStartup: boolean;
-  defaultTab: 'overview' | 'tasks' | 'workflow' | 'discover' | 'data';
+  defaultTab: 'overview' | 'tasks' | 'workflow' | 'promote' | 'discover' | 'data';
   enableMobileView: boolean;
   language: LanguageSetting;
   focusHistory: FocusHistoryEntry[];
@@ -62,7 +62,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   hotspotCache: {},
 };
 
-const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'workflow', 'discover', 'data']);
+const DEFAULT_TABS: ReadonlySet<string> = new Set(['overview', 'tasks', 'workflow', 'promote', 'discover', 'data']);
 
 export function parseSettings(raw: unknown): DashboardSettings {
   const values = isRecord(raw) ? raw : {};
@@ -222,6 +222,7 @@ export class DashboardSettingTab extends PluginSettingTab {
           overview: t('tab.overview'),
           tasks: t('tab.tasks'),
           workflow: t('tab.workflow'),
+          promote: t('tab.promote'),
           discover: t('tab.discover'),
           data: t('tab.data'),
         })

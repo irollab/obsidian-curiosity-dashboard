@@ -20,7 +20,7 @@ export type TranslationKey =
   | 'common.unavailableMobileReadonly' | 'common.unavailableReason' | 'common.unknownReason'
   | 'common.labelPath' | 'common.contextDetail'
   | 'stage.unknown'
-  | 'tab.overview' | 'tab.tasks' | 'tab.workflow' | 'tab.discover' | 'tab.data' | 'tabs.aria'
+  | 'tab.overview' | 'tab.tasks' | 'tab.workflow' | 'tab.promote' | 'tab.discover' | 'tab.data' | 'tabs.aria'
   | 'workflow.deckEmptyTitle' | 'workflow.deckEmptyBody' | 'workflow.seedButton'
   | 'workflow.groupGeneral' | 'workflow.copyButton' | 'workflow.openOutput'
   | 'workflow.focusContext' | 'workflow.needsFocus' | 'workflow.readonlyOutput'
@@ -84,7 +84,7 @@ export type TranslationKey =
   | 'discover.noTemplate' | 'discover.fetchFailed' | 'discover.staleAt'
   | 'discover.prevPage' | 'discover.nextPage' | 'discover.pageInfo'
   | 'discover.templateMissing' | 'discover.seedTemplate' | 'discover.filterAll'
-  | 'discover.pendingTitle' | 'action.promote' | 'view.promoteFailed';
+  | 'discover.pendingTitle' | 'action.promote' | 'view.promoteFailed' | 'promote.empty';
 
 export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.heading': { zh: 'Curiosity Dashboard', en: 'Curiosity Dashboard' },
@@ -140,6 +140,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'tab.overview': { zh: '概览', en: 'Overview' },
   'tab.tasks': { zh: '任务', en: 'Tasks' },
   'tab.workflow': { zh: '工作流', en: 'Workflow' },
+  'tab.promote': { zh: '立项', en: 'Promote' },
   'tab.discover': { zh: '发现', en: 'Discover' },
   'tab.data': { zh: '数据', en: 'Data' },
   'tabs.aria': { zh: '工作台视图', en: 'Dashboard views' },
@@ -410,6 +411,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'discover.seedTemplate': { zh: '生成发现模板', en: 'Generate template' },
   'discover.filterAll': { zh: '全部', en: 'All' },
   'discover.pendingTitle': { zh: '待评估 · 待立项（{count}）', en: 'Pending topics ({count})' },
+  'promote.empty': { zh: '暂无待评估选题', en: 'No pending topics' },
 };
 
 export const STAGE_LABELS: Record<Locale, Record<Stage, string>> = {

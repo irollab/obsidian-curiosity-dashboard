@@ -3,7 +3,6 @@ import type { DashboardModel } from '@/domain/models';
 import type { Translator } from '@/i18n/translator';
 
 import type { DashboardHandlers } from '../dashboard-renderer';
-import { bindGuardedAction } from '../guarded-action';
 import { renderWindowTitlebar } from './window-frame';
 
 // 热点条目过多时翻页，每页条数。
@@ -57,8 +56,6 @@ export function renderDiscoverDeck(
     seed.addEventListener('click', () => void handlers.seedPromptTemplates());
   }
 
-  renderPendingTopics(section, model, handlers, t);
-
   const grid = section.createDiv({ cls: 'curiosity-discover-grid' });
   // 翻页会重建当前页 DOM，故热点选择用 Map 跨页保留（按 url/标题去重）。
   const selectedHotspots = new Map<string, Hotspot>();
@@ -78,40 +75,6 @@ export function renderDiscoverDeck(
     const signals = selected(signalChecks);
     void handlers.copyDiscoveryPrompt(hotspots, signals);
   });
-}
-
-// 待评估区：列出无阶段（尚未进入流水线）的选题，提供「立项」一键升入流水线并设为当前作品。
-// 这些卡此前在面板里没有入口，切换作品选择器也已把它们过滤掉（切过去会落「未知阶段」）。
-function renderPendingTopics(
-  parent: HTMLElement,
-  model: DashboardModel,
-  handlers: DashboardHandlers,
-  t: Translator,
-): void {
-  const pending = model.pickableTopics
-    .filter((topic) => topic.stage === null)
-    .sort((left, right) => right.issue - left.issue);
-  if (pending.length === 0) return;
-
-  const box = parent.createDiv({ cls: 'curiosity-discover-pending' });
-  box.createEl('h3', { text: t.t('discover.pendingTitle', { count: String(pending.length) }) });
-  const list = box.createEl('ul', { cls: 'curiosity-pending-list' });
-  for (const topic of pending) {
-    const item = list.createEl('li', { cls: 'curiosity-pending-item' });
-    item.createSpan({ cls: 'curiosity-pending-issue', text: t.t('hero.issuePill', { issue: topic.issue }) });
-    item.createSpan({ cls: 'curiosity-pending-title', text: topic.title });
-    const promote = item.createEl('button', {
-      cls: 'curiosity-write-action curiosity-pending-promote',
-      text: t.t('action.promote'),
-      type: 'button',
-    });
-    promote.disabled = model.mobileReadOnly;
-    if (model.mobileReadOnly) {
-      promote.setAttr('title', t.t('common.mobileReadonlyMode'));
-    } else {
-      bindGuardedAction(promote, () => handlers.promoteTopic(topic.path));
-    }
-  }
 }
 
 function renderHotspotColumn(

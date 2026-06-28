@@ -14,9 +14,10 @@ import { renderChannelPulse } from './renderers/channel-pulse';
 import { renderQuickActions } from './renderers/quick-actions';
 import { renderWorkflowDeck } from './renderers/workflow-deck';
 import { renderDiscoverDeck } from './renderers/discover-deck';
+import { renderPromoteDeck } from './renderers/promote-deck';
 import { renderDock } from './renderers/dock';
 
-export type DashboardTab = 'overview' | 'tasks' | 'workflow' | 'discover' | 'data';
+export type DashboardTab = 'overview' | 'tasks' | 'workflow' | 'promote' | 'discover' | 'data';
 export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
 
 export interface DashboardHandlers {
@@ -62,6 +63,7 @@ export class DashboardRenderer {
       { id: 'overview', label: t.t('tab.overview') },
       { id: 'tasks', label: t.t('tab.tasks') },
       { id: 'workflow', label: t.t('tab.workflow') },
+      { id: 'promote', label: t.t('tab.promote') },
       { id: 'discover', label: t.t('tab.discover') },
       { id: 'data', label: t.t('tab.data') },
     ];
@@ -127,6 +129,8 @@ export class DashboardRenderer {
         renderQuickActions(panel, model, handlers, t);
       } else if (id === 'workflow') {
         renderWorkflowDeck(panel, model, handlers, t, initialWorkflowGroup);
+      } else if (id === 'promote') {
+        renderPromoteDeck(panel, model, handlers, t);
       } else if (id === 'discover') {
         renderDiscoverDeck(panel, model, handlers, t, hotspotsLoading);
       } else if (id === 'tasks') {
