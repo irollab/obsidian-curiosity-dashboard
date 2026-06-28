@@ -1728,6 +1728,14 @@
 .curiosity-dashboard .curiosity-discover-page-info { font-size: 0.8em; opacity: 0.7; }
 .curiosity-dashboard .curiosity-discover-page-btn { padding: 2px 10px; border: 1px solid var(--curiosity-line); border-radius: 8px; background: var(--curiosity-glass-card-bg); color: var(--curiosity-text); cursor: pointer; }
 .curiosity-dashboard .curiosity-discover-page-btn:disabled { opacity: 0.4; cursor: default; }
+.curiosity-dashboard .curiosity-promote-pager {
+  /* 立项翻页：居中，并以顶部分割线与上方候选列表分隔。 */
+  justify-content: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--curiosity-line);
+}
+.curiosity-dashboard .curiosity-promote-pager:empty { display: none; }
 .curiosity-dashboard .curiosity-discover-source-failed { color: var(--text-warning); font-size: 0.85em; }
 .curiosity-dashboard .curiosity-discover-empty { opacity: 0.7; }
 .curiosity-dashboard .curiosity-discover-stale { font-size: 0.8em; opacity: 0.6; margin: 0 0 8px; }

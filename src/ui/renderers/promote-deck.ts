@@ -34,7 +34,7 @@ export function renderPromoteDeck(
     text: t.t('discover.pendingTitle', { count: String(pending.length) }),
   });
   const list = section.createEl('ul', { cls: 'curiosity-pending-list' });
-  const pager = section.createDiv({ cls: 'curiosity-discover-pager' });
+  const pager = section.createDiv({ cls: 'curiosity-discover-pager curiosity-promote-pager' });
 
   let page = 0;
   const renderPage = (): void => {
