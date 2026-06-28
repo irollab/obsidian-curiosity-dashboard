@@ -1,6 +1,11 @@
-import type { DashboardModel } from '@/domain/models';
+import type { DashboardModel, TopicRecord } from '@/domain/models';
 import { fillPlaceholders, type PromptContext, type WorkflowAction } from '@/domain/workflow';
 import type { DashboardSettings } from '@/settings';
+
+/** 下一期号 = 全库（所有目录）最大 issue + 1；空集从 1 开始。避免只看待评估目录导致已移走期号被复用。 */
+export function nextTopicIssue(topics: readonly TopicRecord[]): number {
+  return topics.reduce((max, topic) => Math.max(max, topic.issue), 0) + 1;
+}
 
 export interface PromptBuildResult {
   label: string;
@@ -35,6 +40,7 @@ export function buildPrompt(
     week: formatWeek(date),
     ideas: formatIdeas(options.ideas ?? []),
     hotspots: '', audienceSignals: '', existingTitles: '',
+    nextIssue: String(nextTopicIssue(model.pickableTopics)),
   };
   return { label: action.label, text: fillPlaceholders(action.body, context), output: action.output };
 }

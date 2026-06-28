@@ -42,6 +42,7 @@ export interface DashboardHandlers {
   archiveHotspots(): Promise<void>;
   copyDiscoveryPrompt(hotspots: Hotspot[], signals: AudienceSignal[]): Promise<void>;
   openHotspot(url: string): void;
+  promoteTopic(path: string): Promise<void>;
 }
 
 export class DashboardRenderer {

@@ -38,6 +38,7 @@ export interface PromptContext {
   hotspots: string;
   audienceSignals: string;
   existingTitles: string;
+  nextIssue: string;
 }
 
 const TOKEN = /\{\{(\w+)\}\}/g;
@@ -72,5 +73,6 @@ function tokenValues(context: PromptContext): Record<string, string> {
     hotspots: context.hotspots,
     audience_signals: context.audienceSignals,
     existing_titles: context.existingTitles,
+    next_issue: context.nextIssue,
   };
 }

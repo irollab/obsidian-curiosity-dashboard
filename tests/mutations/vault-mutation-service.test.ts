@@ -14,6 +14,35 @@ async function topicVault(stage: Stage = '选题'): Promise<FakeVaultGateway> {
   return vault;
 }
 
+describe('VaultMutationService.promoteTopic', () => {
+  it('立项目标卡：设已立项+选题阶段+焦点，并转移旧焦点', async () => {
+    const vault = new FakeVaultGateway();
+    await vault.create('topics/old.md', '# old');
+    await vault.create('topics/new.md', '# new');
+    vault.metadata.set('topics/old.md', { stage: '制作', status: '已立项', homepage_focus: true });
+    vault.metadata.set('topics/new.md', { status: '待评估' });
+
+    await new VaultMutationService(vault).promoteTopic('topics/old.md', 'topics/new.md');
+
+    expect(vault.metadata.get('topics/new.md')).toMatchObject({
+      status: '已立项', stage: '选题', homepage_focus: true,
+    });
+    expect(vault.metadata.get('topics/old.md')?.homepage_focus).toBe(false);
+  });
+
+  it('无旧焦点（from 为 null）时只设目标卡', async () => {
+    const vault = new FakeVaultGateway();
+    await vault.create('topics/new.md', '# new');
+    vault.metadata.set('topics/new.md', { status: '待评估' });
+
+    await new VaultMutationService(vault).promoteTopic(null, 'topics/new.md');
+
+    expect(vault.metadata.get('topics/new.md')).toMatchObject({
+      status: '已立项', stage: '选题', homepage_focus: true,
+    });
+  });
+});
+
 describe('VaultMutationService.toggleTask', () => {
   const secondTask: ChecklistTask = { line: 3, text: 'second', checked: false };
 

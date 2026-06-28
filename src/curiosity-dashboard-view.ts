@@ -5,7 +5,7 @@ import type { WorkflowAction } from '@/domain/workflow';
 import type { Hotspot, AudienceSignal, HotspotSourceResult } from '@/domain/discovery';
 import type { TranslationKey } from '@/i18n/translations';
 import type { Translator } from '@/i18n/translator';
-import { buildPrompt } from '@/mutations/prompt-builder-service';
+import { buildPrompt, nextTopicIssue } from '@/mutations/prompt-builder-service';
 import { buildDiscoveryPrompt } from '@/mutations/discovery-prompt-builder';
 import { buildHotspotArchive, hotspotArchivePath } from '@/mutations/hotspot-archive-builder';
 import { resultsToCache } from '@/data/hotspot-fetch-service';
@@ -142,6 +142,7 @@ export class CuriosityDashboardView extends ItemView {
       archiveHotspots: () => this.archiveHotspots(),
       copyDiscoveryPrompt: (hotspots, signals) => this.copyDiscoveryPrompt(hotspots, signals),
       openHotspot: (url) => this.openHotspot(url),
+      promoteTopic: (path) => this.promoteTopic(path),
     }, this.activeTab, this.t, this.pendingWorkflowGroup, this.hotspotsLoading);
     this.pendingWorkflowGroup = null;
     this.plugin.updateObservedDataPaths(observedReviewPaths(model));
@@ -446,11 +447,25 @@ export class CuriosityDashboardView extends ItemView {
     }
   }
 
+  private async promoteTopic(targetPath: string): Promise<void> {
+    if (this.rejectReadOnlyWrite()) return;
+    if (this.lastModel === null) return;
+    const fromPath = currentFocusTopic(this.lastModel)?.path ?? null;
+    try {
+      await this.plugin.mutationService().promoteTopic(fromPath, targetPath);
+      this.plugin.recordFocusSwitch(targetPath);
+      await this.refresh();
+    } catch (error) {
+      this.showActionError('view.promoteFailed', error);
+    }
+  }
+
   private async openWorkPicker(): Promise<void> {
     if (this.lastModel === null) return;
     const target = await WorkPickerModal.ask(
       this.app,
-      this.lastModel.pickableTopics,
+      // 只列「可成为焦点」的选题（有阶段）：无阶段的待评估卡切过去会落入「未知阶段」死路。
+      this.lastModel.pickableTopics.filter((topic) => topic.stage !== null),
       currentFocusTopic(this.lastModel)?.path ?? null,
       this.t,
     );
@@ -616,6 +631,7 @@ export class CuriosityDashboardView extends ItemView {
     const result = buildDiscoveryPrompt({
       action, hotspots, signals,
       existingTitles: existingTopicTitles(this.lastModel),
+      nextIssue: nextTopicIssue(this.lastModel.pickableTopics),
       settings: this.plugin.settings,
     });
     try {

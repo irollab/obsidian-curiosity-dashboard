@@ -82,6 +82,7 @@ function handlers(): DashboardHandlers {
     archiveHotspots: vi.fn(async () => undefined),
     copyDiscoveryPrompt: vi.fn(async () => undefined),
     openHotspot: vi.fn(),
+    promoteTopic: vi.fn(async () => undefined),
   };
 }
 

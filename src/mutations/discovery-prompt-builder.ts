@@ -8,6 +8,7 @@ export interface DiscoveryPromptInput {
   hotspots: Hotspot[];
   signals: AudienceSignal[];
   existingTitles: string[];
+  nextIssue: number;
   settings: DashboardSettings;
 }
 
@@ -30,6 +31,7 @@ export function buildDiscoveryPrompt(input: DiscoveryPromptInput): PromptBuildRe
     hotspots: formatHotspots(input.hotspots),
     audienceSignals: formatSignals(input.signals),
     existingTitles: formatTitles(input.existingTitles),
+    nextIssue: String(input.nextIssue),
   };
   return {
     label: input.action.label,

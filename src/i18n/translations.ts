@@ -83,7 +83,8 @@ export type TranslationKey =
   | 'discover.sourceFailed' | 'discover.copyButton' | 'discover.copied' | 'discover.selectHint'
   | 'discover.noTemplate' | 'discover.fetchFailed' | 'discover.staleAt'
   | 'discover.prevPage' | 'discover.nextPage' | 'discover.pageInfo'
-  | 'discover.templateMissing' | 'discover.seedTemplate' | 'discover.filterAll';
+  | 'discover.templateMissing' | 'discover.seedTemplate' | 'discover.filterAll'
+  | 'discover.pendingTitle' | 'action.promote' | 'view.promoteFailed';
 
 export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'settings.heading': { zh: 'Curiosity Dashboard', en: 'Curiosity Dashboard' },
@@ -175,6 +176,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'action.createTopicCard': { zh: '创建选题卡', en: 'Create topic card' },
   'action.createScript': { zh: '创建脚本', en: 'Create script' },
   'action.createReview': { zh: '创建复盘', en: 'Create review' },
+  'action.promote': { zh: '立项', en: 'Promote' },
   'action.openScript': { zh: '打开脚本', en: 'Open script' },
   'action.openReview': { zh: '打开复盘', en: 'Open review' },
   'overflow.items': { zh: '另有 {count} 项', en: '{count} more' },
@@ -360,6 +362,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'view.saveTabFailed': { zh: '无法保存当前标签', en: 'Unable to save current tab' },
   'view.saveAssociationFailed': { zh: '无法保存关联路径', en: 'Unable to save association path' },
   'view.switchFocusFailed': { zh: '无法切换当前作品', en: 'Unable to switch current work' },
+  'view.promoteFailed': { zh: '无法立项', en: 'Unable to promote topic' },
   'view.mobileReadonlyModify': { zh: '移动端只读，不能修改文件。', en: 'Read-only on mobile; cannot modify files.' },
   'view.noSettingsEntry': {
     zh: '当前 Obsidian 版本未提供设置入口', en: 'This Obsidian version provides no settings entry',
@@ -406,6 +409,7 @@ export const TRANSLATIONS: Record<TranslationKey, Record<Locale, string>> = {
   'discover.templateMissing': { zh: '还缺少「发现」选题模板，点右侧按钮一键生成。', en: 'The discovery topic template is missing. Click to generate it.' },
   'discover.seedTemplate': { zh: '生成发现模板', en: 'Generate template' },
   'discover.filterAll': { zh: '全部', en: 'All' },
+  'discover.pendingTitle': { zh: '待评估 · 待立项（{count}）', en: 'Pending topics ({count})' },
 };
 
 export const STAGE_LABELS: Record<Locale, Record<Stage, string>> = {

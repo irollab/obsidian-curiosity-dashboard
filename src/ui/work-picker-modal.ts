@@ -54,6 +54,9 @@ export class WorkPickerModal extends Modal {
           text: this.t.t('hero.issuePill', { issue: topic.issue }),
         });
         button.createSpan({ cls: 'curiosity-work-picker-title', text: topic.title });
+        if (topic.stage !== null) {
+          button.createSpan({ cls: 'curiosity-work-picker-stage', text: this.t.stageLabel(topic.stage) });
+        }
         button.addEventListener('click', () => this.finish(topic.path));
       }
     }

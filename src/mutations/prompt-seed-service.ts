@@ -18,7 +18,7 @@ const TEMPLATES: SeedTemplate[] = [
   {
     filename: '1-收集灵感整理选题卡.md',
     frontmatter: { id: 'collect-ideas', label: '收集灵感 → 整理选题卡', stage: '选题', order: 1, needs_focus: false, output: '10-选题池/待评估', description: '把零散想法整理成标准选题卡' },
-    body: '请把下面这些想法整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题使用 {{topic_template}} 的结构。\n不要写完整脚本，只做选题判断。\n\n想法：\n{{ideas}}',
+    body: '请把下面这些想法整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题使用 {{topic_template}} 的结构。\n不要写完整脚本，只做选题判断。\n\n期号规则：新选题卡期号从 {{next_issue}} 开始（已是全库最大期号+1）；多个则依次 {{next_issue}}、+1、+2……。\n文件名前缀与 frontmatter 的 issue 都用该期号，并扫描整个 10-选题池（含 待评估/已立项/暂缓/已归档 等所有子目录）确认不与已有选题重复——不要只看待评估目录。\n\n想法：\n{{ideas}}',
   },
   {
     filename: '2-批量评估待评估选题.md',
@@ -68,7 +68,7 @@ const TEMPLATES: SeedTemplate[] = [
   {
     filename: '11-从热点+受众生成选题卡.md',
     frontmatter: { id: 'spark-topics', label: '🔥 从热点+受众生成选题卡', stage: '选题', order: 3, needs_focus: false, output: '10-选题池/待评估', description: '热点×受众反馈拼成选题卡' },
-    body: '请把下面的热点和受众反馈，整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题用 {{topic_template}} 的结构；只做选题判断，不写完整脚本。\n要求：优先选「热点时机」与「受众真实问过的问题」有交集的角度；避免与「已有选题」重复。\n\n热点：\n{{hotspots}}\n\n受众反馈：\n{{audience_signals}}\n\n已有选题（不要重复）：\n{{existing_titles}}',
+    body: '请把下面的热点和受众反馈，整理成 Obsidian 选题卡，放到 {{inbox_dir}}。\n每个选题用 {{topic_template}} 的结构；只做选题判断，不写完整脚本。\n要求：优先选「热点时机」与「受众真实问过的问题」有交集的角度；避免与「已有选题」重复。\n期号规则：新选题卡期号从 {{next_issue}} 开始（已是全库最大期号+1），多个则依次递增；文件名前缀与 frontmatter 的 issue 都用该期号，扫描整个 10-选题池所有子目录确认不重复，不要只看待评估目录。\n\n热点：\n{{hotspots}}\n\n受众反馈：\n{{audience_signals}}\n\n已有选题（不要重复）：\n{{existing_titles}}',
   },
 ];
 

@@ -223,6 +223,7 @@ function makeHarness(
     advanceStage: vi.fn(async () => '发布' as const),
     setAssociationPath: vi.fn(async () => undefined),
     toggleTask: vi.fn(async () => undefined),
+    promoteTopic: vi.fn(async () => undefined),
   };
   const saveSettings = vi.fn<() => Promise<void>>(async () => undefined);
   const templateCreate = vi.fn<
@@ -258,6 +259,7 @@ function makeHarness(
     promptSeedService: () => promptSeed,
     ideaCaptureService: () => ideaCapture,
     ideaInboxService: () => ideaInbox,
+    recordFocusSwitch: vi.fn(),
     saveSettings,
     settings: { ...DEFAULT_SETTINGS, defaultTab, enableMobileView },
     templateService: () => ({ create: templateCreate }),
@@ -310,6 +312,18 @@ function findTaskButton(
   if (root.classList.has('curiosity-task') && root.textContent === text) return root;
   for (const child of root.children) {
     const match = findTaskButton(child, text);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
+function findByClass(
+  root: InstanceType<typeof obsidianMock.FakeElement>,
+  cls: string,
+): InstanceType<typeof obsidianMock.FakeElement> | undefined {
+  if (root.classList.has(cls)) return root;
+  for (const child of root.children) {
+    const match = findByClass(child, cls);
     if (match !== undefined) return match;
   }
   return undefined;
@@ -545,6 +559,50 @@ describe('CuriosityDashboardView', () => {
     await vi.waitFor(() => expect(harness.mutation.toggleTask).toHaveBeenCalledWith('10-选题池/39.md', task));
     await vi.waitFor(() => expect(obsidianMock.notices).toContain(
       '无法更新任务：Task changed; refresh and try again',
+    ));
+  });
+
+  it('作品选择器只列出可成为焦点（有阶段）的选题，过滤掉无阶段的待评估卡', async () => {
+    modalMock.workPickerAsk.mockClear();
+    const focusTopic = {
+      path: '10-选题池/已立项/39.md', basename: '39', title: '当前', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null, reviewPath: null,
+    };
+    const planned = { ...focusTopic, path: '10-选题池/已立项/40.md', basename: '40', issue: 40, title: '已规划', stage: '选题' as const, homepageFocus: false };
+    const pending = { ...focusTopic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估', stage: null, status: '待评估', homepageFocus: false };
+    const harness = makeHarness(async () => ({
+      ...model,
+      focus: { kind: 'ready', topic: focusTopic },
+      pickableTopics: [pending, planned, focusTopic],
+    }));
+    await harness.view.refresh();
+
+    findDockLabel(harness.view.contentEl, '作品')?.parent?.click();
+    await vi.waitFor(() => expect(modalMock.workPickerAsk).toHaveBeenCalled());
+    const passed = modalMock.workPickerAsk.mock.calls[0]?.[1] as Array<{ issue: number }>;
+    // 无阶段的待评估卡（42）被过滤，避免切过去落入「未知阶段」死路。
+    expect(passed.map((entry) => entry.issue).sort((a, b) => a - b)).toEqual([39, 40]);
+  });
+
+  it('发现 tab 点「立项」把待评估卡升入流水线并转移焦点', async () => {
+    const focusTopic = {
+      path: '10-选题池/已立项/39.md', basename: '39', title: '当前', issue: 39,
+      status: '已立项', stage: '制作' as const, priority: null, dueDate: null,
+      nextAction: null, homepageFocus: true, scriptPath: null, assetPath: null, reviewPath: null,
+    };
+    const pending = { ...focusTopic, path: '10-选题池/待评估/42.md', basename: '42', issue: 42, title: '待评估卡', stage: null, status: '待评估', homepageFocus: false };
+    const harness = makeHarness(async () => ({
+      ...model,
+      focus: { kind: 'ready', topic: focusTopic },
+      pickableTopics: [pending, focusTopic],
+    }), true, 'discover');
+    await harness.view.refresh();
+
+    findByClass(harness.view.contentEl, 'curiosity-pending-promote')?.click();
+    await vi.waitFor(() => expect(harness.mutation.promoteTopic).toHaveBeenCalledWith(
+      '10-选题池/已立项/39.md',
+      '10-选题池/待评估/42.md',
     ));
   });
 

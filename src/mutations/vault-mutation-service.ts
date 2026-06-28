@@ -1,6 +1,6 @@
 import { parseChecklistSection, toggleChecklistLine } from '@/domain/checklist';
 import type { ChecklistTask } from '@/domain/models';
-import { nextStage, type Stage } from '@/domain/stages';
+import { nextStage, STAGES, type Stage } from '@/domain/stages';
 import type { VaultGateway } from '@/ports/vault-gateway';
 
 export type AssociationField = 'script_path' | 'asset_path' | 'review_path';
@@ -49,6 +49,21 @@ export class VaultMutationService {
         throw new Error('Association already set; use an explicit edit to replace it');
       }
       frontmatter[field] = value;
+    });
+  }
+
+  async promoteTopic(fromFocusPath: string | null, targetPath: string): Promise<void> {
+    // 待评估卡立项：进入流水线（已立项 + 流水线首阶段「选题」）并把唯一焦点转移到该卡。
+    // 仅改 frontmatter、不移动文件——面板按 frontmatter 识别选题，目录位置不影响逻辑。
+    if (fromFocusPath !== null && fromFocusPath !== targetPath) {
+      await this.vault.updateFrontmatter(fromFocusPath, (frontmatter) => {
+        frontmatter.homepage_focus = false;
+      });
+    }
+    await this.vault.updateFrontmatter(targetPath, (frontmatter) => {
+      frontmatter.status = '已立项';
+      frontmatter.stage = STAGES[0];
+      frontmatter.homepage_focus = true;
     });
   }
 

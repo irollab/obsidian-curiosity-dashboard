@@ -6,10 +6,18 @@ vi.mock('obsidian', () => ({
   Setting: class {},
 }));
 
-import type { DashboardModel } from '@/domain/models';
+import type { DashboardModel, TopicRecord } from '@/domain/models';
 import type { WorkflowAction } from '@/domain/workflow';
-import { buildPrompt, type PromptBuildResult } from '@/mutations/prompt-builder-service';
+import { buildPrompt, nextTopicIssue, type PromptBuildResult } from '@/mutations/prompt-builder-service';
 import { DEFAULT_SETTINGS } from '@/settings';
+
+function topic(issue: number): TopicRecord {
+  return {
+    path: `10-选题池/${issue}.md`, basename: String(issue), title: `T${issue}`, issue,
+    status: '待评估', stage: null, priority: null, dueDate: null, nextAction: null,
+    homepageFocus: false, scriptPath: null, assetPath: null, reviewPath: null,
+  };
+}
 
 const action: WorkflowAction = {
   id: 'evaluate-topics', label: '批量评估', description: '', group: '选题', order: 2,
@@ -47,6 +55,28 @@ describe('buildPrompt', () => {
     });
     const result = buildPrompt({ ...action, body: '焦点 {{focus_title}} 第{{focus_issue}}期' }, focused, DEFAULT_SETTINGS, { now: () => new Date('2026-06-25T00:00:00') });
     expect(result.text).toBe('焦点 Codex首页 第39期');
+  });
+
+  it('用全库（含待评估/已立项/已移走）最大期号 +1 填充 {{next_issue}}', () => {
+    const m = model({ pickableTopics: [topic(39), topic(41), topic(12)] });
+    const result = buildPrompt(
+      { ...action, body: '新卡期号 {{next_issue}}' }, m, DEFAULT_SETTINGS,
+      { now: () => new Date('2026-06-25T00:00:00') },
+    );
+    expect(result.text).toBe('新卡期号 42');
+  });
+
+  it('无任何选题时 {{next_issue}} 从 1 开始', () => {
+    const result = buildPrompt(
+      { ...action, body: '新卡期号 {{next_issue}}' }, model(), DEFAULT_SETTINGS,
+      { now: () => new Date('2026-06-25T00:00:00') },
+    );
+    expect(result.text).toBe('新卡期号 1');
+  });
+
+  it('nextTopicIssue 取最大 issue + 1，空集为 1', () => {
+    expect(nextTopicIssue([topic(7), topic(40), topic(3)])).toBe(41);
+    expect(nextTopicIssue([])).toBe(1);
   });
 
   it('把选中的灵感按序号填入 {{ideas}}', () => {

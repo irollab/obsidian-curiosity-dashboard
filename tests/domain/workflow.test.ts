@@ -19,14 +19,15 @@ function context(overrides: Partial<PromptContext> = {}): PromptContext {
     hotspots: '',
     audienceSignals: '',
     existingTitles: '',
+    nextIssue: '40',
     ...overrides,
   };
 }
 
 describe('fillPlaceholders', () => {
   it('替换已知占位符', () => {
-    const out = fillPlaceholders('评估 {{inbox_dir}} 焦点 {{focus_title}} 第{{focus_issue}}期 {{date}}', context());
-    expect(out).toBe('评估 10-选题池/待评估 焦点 示例 第39期 2026-06-25');
+    const out = fillPlaceholders('评估 {{inbox_dir}} 焦点 {{focus_title}} 第{{focus_issue}}期 {{date}} 下一期 {{next_issue}}', context());
+    expect(out).toBe('评估 10-选题池/待评估 焦点 示例 第39期 2026-06-25 下一期 40');
   });
 
   it('未知占位符原样保留', () => {
@@ -43,7 +44,7 @@ function baseContext(over: Partial<PromptContext> = {}): PromptContext {
   return {
     focus: null, inboxDir: '', topicDir: '', scriptDraftDir: '', assetDir: '',
     reviewDir: '', topicTemplate: '', scriptTemplate: '', reviewTemplate: '',
-    date: '', week: '', ideas: '', hotspots: '', audienceSignals: '', existingTitles: '',
+    date: '', week: '', ideas: '', hotspots: '', audienceSignals: '', existingTitles: '', nextIssue: '',
     ...over,
   };
 }

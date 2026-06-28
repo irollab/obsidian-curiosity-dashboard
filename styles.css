@@ -452,6 +452,16 @@
   white-space: nowrap;
 }
 
+.curiosity-modal .curiosity-work-picker-stage {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid var(--curiosity-purple);
+  border-radius: 999px;
+  color: var(--curiosity-purple);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .curiosity-dashboard .curiosity-content {
   width: min(100%, 2160px);
   margin-inline: auto;
@@ -1672,6 +1682,31 @@
 .curiosity-dashboard .curiosity-idea-delete:hover:not(:disabled) { background: #ff5f57; border-color: #ff5f57; color: #2a0000; }
 .curiosity-dashboard .curiosity-workflow-empty { text-align: center; padding: 1.5rem 1rem; }
 .curiosity-dashboard .curiosity-discover-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.curiosity-dashboard .curiosity-discover-pending {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--curiosity-glass-border);
+  border-left: 3px solid var(--curiosity-cyan);
+  border-radius: 12px;
+  background: rgba(0, 229, 255, 0.06);
+}
+.curiosity-dashboard .curiosity-discover-pending h3 { margin: 0 0 10px; font-size: 13px; }
+.curiosity-dashboard .curiosity-pending-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.curiosity-dashboard .curiosity-pending-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.curiosity-dashboard .curiosity-pending-issue { flex: 0 0 auto; color: var(--curiosity-cyan); font-size: 12px; font-weight: 700; }
+.curiosity-dashboard .curiosity-pending-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curiosity-dashboard .curiosity-pending-promote { flex: 0 0 auto; min-height: 32px; }
 .curiosity-dashboard .curiosity-discover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .curiosity-dashboard .curiosity-discover-col {
   /* 更不透明的卡片背景框，避免文字直接压在背景图上看不清。 */
