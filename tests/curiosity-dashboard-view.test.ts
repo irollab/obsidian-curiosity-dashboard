@@ -604,6 +604,8 @@ describe('CuriosityDashboardView', () => {
       '10-选题池/已立项/39.md',
       '10-选题池/待评估/42.md',
     ));
+    // 立项后自动跳到「概览」：概览渲染 mission control（含「本期执行清单」标题）。
+    await vi.waitFor(() => expect(findByText(harness.view.contentEl, '本期执行清单')).not.toBeUndefined());
   });
 
   it('uses the native confirmation modal before advancing and surfaces file-open failures', async () => {

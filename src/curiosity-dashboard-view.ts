@@ -455,6 +455,8 @@ export class CuriosityDashboardView extends ItemView {
       await this.plugin.mutationService().promoteTopic(fromPath, targetPath);
       this.plugin.recordFocusSwitch(targetPath);
       await this.refresh();
+      // 立项后落到「概览」，让用户直接看到新当前作品的任务/工作流。
+      await this.selectTab('overview');
     } catch (error) {
       this.showActionError('view.promoteFailed', error);
     }
